@@ -1,4 +1,4 @@
-# 📊 Portal Power BI
+# 📊 Portal Power BI - Grupo FRT
 
 Portal para compartilhar relatórios do Power BI com autenticação de usuários.
 
