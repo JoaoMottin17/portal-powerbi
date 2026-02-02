@@ -4,7 +4,7 @@ Portal para compartilhar relatórios do Power BI com autenticação de usuários
 
 ## 🚀 Acesso Online
 
-**URL:** https://portal-powerbi.streamlit.app
+**URL:** https://paineis-grupofrt.streamlit.app
 
 **Primeiro acesso:**
 - 👤 Usuário: `admin`
