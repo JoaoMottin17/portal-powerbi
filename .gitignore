@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -7,13 +8,24 @@ env/
 venv/
 .env
 .venv/
+
+# Banco de dados
 *.db
 *.sqlite
 *.db-journal
+
+# Streamlit
 .streamlit/secrets.toml
+
+# Sistema
 .DS_Store
 Thumbs.db
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+
+# Logs
+*.log
