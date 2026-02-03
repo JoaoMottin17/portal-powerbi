@@ -1,37 +1,197 @@
 import streamlit as st
-from auth import AuthSystem
-from database import Database
+import sqlite3
+import hashlib
 import re
-import pandas as pd
 
-# Inicializar sistemas
-auth = AuthSystem()
-db = Database()
+# ========== CONFIGURAÇÃO ==========
+st.set_page_config(
+    page_title="Portal Power BI - Grupo FRT",
+    page_icon="📊",
+    layout="wide"
+)
 
-# Verificar autenticação
-auth.proteger_pagina()
-
-# Obter usuário atual
-usuario = auth.get_current_user()
-is_admin = auth.is_admin()
-
-# Sidebar - Menu
-with st.sidebar:
-    st.title(f"👤 {usuario['username']}")
+# ========== BANCO DE DADOS ==========
+def init_db():
+    """Inicializar banco de dados"""
+    conn = sqlite3.connect("portal.db")
+    cursor = conn.cursor()
     
-    if is_admin:
-        st.markdown("**⚙️ Administrador**")
+    # Usuários
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        is_admin BOOLEAN DEFAULT 0,
+        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
     
-    menu = st.selectbox(
-        "Menu",
-        ["📊 Dashboard", "➕ Novo Relatório", "👥 Gerenciar Usuários", "⚙️ Configurações"]
-    )
+    # Relatórios
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS relatorios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        titulo TEXT NOT NULL,
+        link_powerbi TEXT NOT NULL,
+        descricao TEXT,
+        categoria TEXT DEFAULT 'Geral',
+        criado_por INTEGER,
+        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (criado_por) REFERENCES usuarios(id)
+    )''')
     
-    # Botão de logout
-    if st.button("🚪 Sair", use_container_width=True):
-        auth.logout()
+    # Verificar se admin existe
+    cursor.execute("SELECT COUNT(*) FROM usuarios WHERE username = 'admin'")
+    if cursor.fetchone()[0] == 0:
+        # SENHA CORRETA: admin123
+        password_hash = hashlib.sha256(b"admin123_salt_grupofrt").hexdigest()
+        cursor.execute('''
+        INSERT INTO usuarios (username, password_hash, is_admin)
+        VALUES (?, ?, ?)''', ('admin', password_hash, 1))
+    
+    conn.commit()
+    conn.close()
 
-# Função para validar link do Power BI
+# ========== FUNÇÕES AUXILIARES ==========
+def hash_senha(senha):
+    """Hash para senhas - DEVE SER IGUAL AO USADO NA CRIAÇÃO DO ADMIN"""
+    return hashlib.sha256(f"{senha}_salt_grupofrt".encode()).hexdigest()
+
+def verificar_login(username, senha):
+    """Verificar credenciais"""
+    conn = sqlite3.connect("portal.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username, password_hash, is_admin FROM usuarios WHERE username = ?", (username,))
+    usuario = cursor.fetchone()
+    conn.close()
+    
+    if usuario and hash_senha(senha) == usuario[2]:
+        return {
+            "id": usuario[0],
+            "username": usuario[1],
+            "is_admin": bool(usuario[3]),
+            "autenticado": True
+        }
+    return None
+
+def listar_relatorios(usuario_id=None):
+    """Listar relatórios"""
+    conn = sqlite3.connect("portal.db")
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT r.*, u.username as criador
+        FROM relatorios r
+        LEFT JOIN usuarios u ON r.criado_por = u.id
+        ORDER BY r.criado_em DESC
+    ''')
+    
+    relatorios = []
+    for row in cursor.fetchall():
+        relatorios.append({
+            'id': row[0],
+            'titulo': row[1],
+            'link_powerbi': row[2],
+            'descricao': row[3],
+            'categoria': row[4],
+            'criado_por': row[5],
+            'criado_em': row[6],
+            'criador': row[7]
+        })
+    
+    conn.close()
+    return relatorios
+
+def criar_relatorio(titulo, link_powerbi, descricao, categoria, criado_por):
+    """Criar novo relatório"""
+    conn = sqlite3.connect("portal.db")
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT INTO relatorios (titulo, link_powerbi, descricao, categoria, criado_por)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (titulo, link_powerbi, descricao, categoria, criado_por))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Erro ao criar relatório: {e}")
+        return False
+    finally:
+        conn.close()
+
+def excluir_relatorio(relatorio_id):
+    """Excluir relatório"""
+    conn = sqlite3.connect("portal.db")
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("DELETE FROM relatorios WHERE id = ?", (relatorio_id,))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Erro ao excluir relatório: {e}")
+        return False
+    finally:
+        conn.close()
+
+def listar_usuarios():
+    """Listar todos os usuários"""
+    conn = sqlite3.connect("portal.db")
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id, username, is_admin, criado_em FROM usuarios ORDER BY criado_em DESC")
+    
+    usuarios = []
+    for row in cursor.fetchall():
+        usuarios.append({
+            'id': row[0],
+            'username': row[1],
+            'is_admin': bool(row[2]),
+            'criado_em': row[3]
+        })
+    
+    conn.close()
+    return usuarios
+
+def criar_usuario(username, senha, is_admin=False):
+    """Criar novo usuário"""
+    conn = sqlite3.connect("portal.db")
+    cursor = conn.cursor()
+    
+    try:
+        password_hash = hash_senha(senha)
+        cursor.execute('''
+            INSERT INTO usuarios (username, password_hash, is_admin)
+            VALUES (?, ?, ?)
+        ''', (username, password_hash, 1 if is_admin else 0))
+        
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False  # Usuário já existe
+    except Exception as e:
+        print(f"Erro ao criar usuário: {e}")
+        return False
+    finally:
+        conn.close()
+
+def atualizar_senha(usuario_id, nova_senha):
+    """Atualizar senha do usuário"""
+    conn = sqlite3.connect("portal.db")
+    cursor = conn.cursor()
+    
+    try:
+        nova_hash = hash_senha(nova_senha)
+        cursor.execute("UPDATE usuarios SET password_hash = ? WHERE id = ?", (nova_hash, usuario_id))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Erro ao atualizar senha: {e}")
+        return False
+    finally:
+        conn.close()
+
 def validar_link_powerbi(link):
     """Validar se o link é do Power BI"""
     padroes = [
@@ -47,364 +207,337 @@ def validar_link_powerbi(link):
     
     return False
 
-# Página: Dashboard
+# ========== INICIALIZAR ==========
+init_db()
+
+# ========== VERIFICAR LOGIN ==========
+if "usuario" not in st.session_state:
+    st.session_state.usuario = None
+
+if not st.session_state.usuario:
+    # PÁGINA DE LOGIN
+    st.title("🔐 Portal Power BI - Grupo FRT")
+    st.markdown("---")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        with st.form("login_form", border=False):
+            st.subheader("Acesso ao Sistema")
+            
+            username = st.text_input("**Usuário**", placeholder="Digite seu usuário")
+            senha = st.text_input("**Senha**", type="password", placeholder="Digite sua senha")
+            
+            if st.form_submit_button("🚀 **Entrar no Portal**", use_container_width=True):
+                if username and senha:
+                    usuario = verificar_login(username, senha)
+                    if usuario:
+                        st.session_state.usuario = usuario
+                        st.success(f"Bem-vindo, {usuario['username']}!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Usuário ou senha incorretos!")
+                else:
+                    st.warning("⚠️ Preencha todos os campos!")
+        
+        st.markdown("---")
+        with st.expander("ℹ️ **Informações de acesso**"):
+            st.write("**Primeiro acesso:**")
+            st.code("Usuário: admin")
+            st.code("Senha: admin123")
+            st.write("**Importante:** Altere a senha após o primeiro acesso!")
+    
+    st.stop()
+
+# ========== APÓS LOGIN ==========
+usuario = st.session_state.usuario
+is_admin = usuario['is_admin']
+
+# ========== SIDEBAR (MENU) ==========
+with st.sidebar:
+    st.title(f"👤 {usuario['username']}")
+    
+    if is_admin:
+        st.success("⚙️ **Administrador**")
+    
+    st.markdown("---")
+    
+    menu = st.radio(
+        "**Menu Principal**",
+        ["📊 Dashboard", "➕ Novo Relatório", "👥 Gerenciar Usuários", "⚙️ Minha Conta"],
+        label_visibility="collapsed"
+    )
+    
+    st.markdown("---")
+    
+    if st.button("🚪 **Sair do Sistema**", use_container_width=True, type="secondary"):
+        st.session_state.usuario = None
+        st.rerun()
+
+# ========== DASHBOARD ==========
 if menu == "📊 Dashboard":
-    st.title("📊 Portal Power BI")
+    st.title("📊 Dashboard de Relatórios")
     
     # Buscar relatórios
-    relatorios = db.listar_relatorios(ativos=True, usuario_id=usuario['id'])
+    relatorios = listar_relatorios(usuario['id'])
     
     if not relatorios:
-        st.info("Nenhum relatório disponível. Adicione um novo relatório!")
+        st.info("📝 **Nenhum relatório cadastrado.**")
+        st.info("Adicione seu primeiro relatório usando o menu '➕ Novo Relatório'")
     else:
         # Filtros
         col1, col2 = st.columns(2)
         with col1:
             categorias = list(set([r['categoria'] for r in relatorios]))
-            categoria_filtro = st.selectbox("Filtrar por categoria", ["Todas"] + categorias)
-        
+            filtro_cat = st.selectbox("Filtrar por categoria", ["Todas"] + categorias)
         with col2:
-            busca = st.text_input("🔍 Buscar relatório", placeholder="Título ou descrição...")
+            buscar = st.text_input("🔍 Buscar relatório", placeholder="Digite título ou descrição...")
         
         # Aplicar filtros
         relatorios_filtrados = relatorios
-        if categoria_filtro != "Todas":
-            relatorios_filtrados = [r for r in relatorios_filtrados if r['categoria'] == categoria_filtro]
+        if filtro_cat != "Todas":
+            relatorios_filtrados = [r for r in relatorios_filtrados if r['categoria'] == filtro_cat]
         
-        if busca:
-            busca_lower = busca.lower()
+        if buscar:
+            buscar_lower = buscar.lower()
             relatorios_filtrados = [
                 r for r in relatorios_filtrados 
-                if busca_lower in r['titulo'].lower() or 
-                (r['descricao'] and busca_lower in r['descricao'].lower())
+                if buscar_lower in r['titulo'].lower() or 
+                (r['descricao'] and buscar_lower in r['descricao'].lower())
             ]
         
         # Exibir relatórios
-        st.subheader(f"Relatórios ({len(relatorios_filtrados)})")
+        st.subheader(f"📋 Relatórios Disponíveis ({len(relatorios_filtrados)})")
         
         for relatorio in relatorios_filtrados:
+            # Usar uma chave de sessão para controlar visibilidade
+            chave_visivel = f"visivel_{relatorio['id']}"
+            
+            # Inicializar se não existir
+            if chave_visivel not in st.session_state:
+                st.session_state[chave_visivel] = False
+            
             with st.expander(f"📈 {relatorio['titulo']} - *{relatorio['categoria']}*"):
-                col_a, col_b = st.columns([3, 1])
                 
-                with col_a:
+                # Informações do relatório
+                col_info, col_btn = st.columns([3, 1])
+                
+                with col_info:
                     st.write(f"**Descrição:** {relatorio['descricao'] or 'Sem descrição'}")
                     st.write(f"**Criado por:** {relatorio['criador'] or 'Sistema'}")
                     st.write(f"**Data:** {relatorio['criado_em']}")
-                    
-                    if relatorio['tags']:
-                        tags_html = " ".join([f"`{tag}`" for tag in relatorio['tags']])
-                        st.markdown(f"**Tags:** {tags_html}")
                 
-                with col_b:
-                    if st.button("Abrir", key=f"abrir_{relatorio['id']}", type="secondary"):
-                        # Registrar acesso
-                        db.registrar_acesso(usuario['id'], relatorio['id'])
-                        
-                        st.markdown("---")
-                        st.subheader(relatorio['titulo'])
-                        
-                        # Preparar link para abrir em NOVA ABA
-                        link = relatorio['link_powerbi']
-                        
-                        # Garantir que é link de "view" (não embed)
-                        if "embed" in link:
-                            link = link.replace("embed", "view")
-                        
-                        # Botão para abrir em nova aba
-                        st.markdown(f"""
-                        <div style="text-align: center; margin: 30px 0;">
-                            <a href="{link}" target="_blank" style="text-decoration: none;">
-                                <div style="
-                                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                                    color: white;
-                                    padding: 18px 35px;
-                                    border-radius: 12px;
-                                    font-size: 18px;
-                                    font-weight: bold;
-                                    cursor: pointer;
-                                    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-                                    transition: all 0.3s ease;
-                                    display: inline-flex;
-                                    align-items: center;
-                                    gap: 12px;
-                                " 
-                                onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 10px 20px rgba(0, 0, 0, 0.2)';"
-                                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 6px 12px rgba(0, 0, 0, 0.15)';"
-                                >
-                                <span style="font-size: 24px;">📊</span>
-                                <span>ABRIR RELATÓRIO DO POWER BI</span>
-                                <span style="font-size: 24px;">↗️</span>
-                                </div>
-                            </a>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # Link para cópia
-                        with st.expander("📋 Copiar link manualmente"):
-                            st.code(link, language="text")
-                            if st.button("📋 Copiar link", key=f"copy_{relatorio['id']}"):
-                                st.success("✅ Link copiado! Use Ctrl+V para colar.")
+                with col_btn:
+                    # Botão para abrir em nova aba
+                    link = relatorio['link_powerbi']
+                    if "embed" in link:
+                        link = link.replace("embed", "view")
+                    
+                    # Botão PEQUENO para caber na caixa
+                    st.markdown(f"""
+                    <div style="margin-bottom: 5px;">
+                        <a href="{link}" target="_blank" style="text-decoration: none;">
+                            <div style="
+                                background-color: #2196F3;
+                                color: white;
+                                border-radius: 4px;
+                                padding: 6px 8px;
+                                font-size: 11px;
+                                font-weight: 600;
+                                text-align: center;
+                                cursor: pointer;
+                                transition: all 0.2s;
+                                border: 1px solid #1976D2;
+                                height: 30px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                gap: 4px;
+                            "
+                            onmouseover="this.style.backgroundColor='#1976D2'; this.style.transform='scale(1.02)';"
+                            onmouseout="this.style.backgroundColor='#2196F3'; this.style.transform='scale(1)';"
+                            >
+                            <span>📊</span>
+                            <span>Abrir</span>
+                            </div>
+                        </a>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Botão para mostrar/ocultar link
+                    if st.button("🔗 Link", key=f"link_{relatorio['id']}", type="secondary", 
+                                use_container_width=True):
+                        st.session_state[chave_visivel] = not st.session_state[chave_visivel]
+                        st.rerun()
+                
+                # Mostrar link se visível
+                if st.session_state[chave_visivel]:
+                    st.markdown("---")
+                    st.write("**Link do Relatório:**")
+                    st.code(link, language="text")
+                    
+                    # Botões compactos
+                    col_copy, col_close = st.columns(2)
+                    with col_copy:
+                        if st.button("📋 Copiar", key=f"copy_{relatorio['id']}"):
+                            st.success("✅ Link copiado!")
+                    with col_close:
+                        if st.button("❌ Fechar", key=f"hide_{relatorio['id']}"):
+                            st.session_state[chave_visivel] = False
+                            st.rerun()
                 
                 # Botões de admin
                 if is_admin or relatorio['criado_por'] == usuario['id']:
+                    st.markdown("---")
                     col_edit, col_del = st.columns(2)
                     with col_edit:
                         if st.button("✏️ Editar", key=f"edit_{relatorio['id']}"):
                             st.session_state['editar_relatorio'] = relatorio['id']
                     with col_del:
                         if st.button("🗑️ Excluir", key=f"del_{relatorio['id']}"):
-                            if db.excluir_relatorio(relatorio['id'])['success']:
-                                st.success("Relatório excluído!")
+                            if excluir_relatorio(relatorio['id']):
+                                st.success("✅ Relatório excluído!")
                                 st.rerun()
-# Página: Novo Relatório
+
+# ========== NOVO RELATÓRIO ==========
 elif menu == "➕ Novo Relatório":
     st.title("➕ Adicionar Novo Relatório")
     
-    with st.form("novo_relatorio_form"):
-        titulo = st.text_input("Título do Relatório *", placeholder="Ex: Dashboard de Vendas")
-        link = st.text_area("Link do Power BI *", 
-                          placeholder="Cole aqui o link gerado pelo Power BI...",
-                          height=100)
+    with st.form("novo_relatorio_form", clear_on_submit=True):
+        st.subheader("📝 Informações do Relatório")
+        
+        titulo = st.text_input("**Título do Relatório** *", 
+                             placeholder="Ex: Dashboard de Vendas Trimestral")
+        
+        link = st.text_area("**Link do Power BI** *", 
+                          height=120,
+                          placeholder="""Cole aqui o link gerado pelo Power BI...
+
+Exemplo: https://app.powerbi.com/view?r=eyJrIjoi...""")
         
         col1, col2 = st.columns(2)
         with col1:
-            descricao = st.text_area("Descrição", placeholder="Descreva o relatório...")
+            descricao = st.text_area("**Descrição**", 
+                                   placeholder="Descreva o conteúdo deste relatório...",
+                                   height=100)
         with col2:
-            categoria = st.text_input("Categoria", value="Geral")
+            categoria = st.selectbox("**Categoria**", 
+                                   ["Geral", "Vendas", "Marketing", "Financeiro", "RH", "Operações", "Logística"])
         
-        tags = st.text_input("Tags (separadas por vírgula)", 
-                           placeholder="vendas, marketing, financeiro")
+        st.markdown("---")
         
-        submitted = st.form_submit_button("Salvar Relatório", type="primary")
-        
-        if submitted:
+        if st.form_submit_button("💾 **Salvar Relatório**", type="primary", use_container_width=True):
             if not titulo or not link:
-                st.error("Preencha os campos obrigatórios (*)!")
+                st.error("❌ **Preencha os campos obrigatórios (*)!**")
             elif not validar_link_powerbi(link):
-                st.error("Link inválido! Certifique-se que é um link do Power BI.")
+                st.error("❌ **Link inválido! Certifique-se que é um link do Power BI.**")
             else:
-                # Processar tags
-                tags_list = [tag.strip() for tag in tags.split(",")] if tags else []
-                
-                resultado = db.criar_relatorio(
-                    titulo=titulo,
-                    link_powerbi=link,
-                    descricao=descricao,
-                    categoria=categoria,
-                    tags=tags_list if tags_list else None,
-                    criado_por=usuario['id']
-                )
-                
-                if resultado['success']:
-                    st.success("✅ Relatório adicionado com sucesso!")
+                if criar_relatorio(titulo, link, descricao, categoria, usuario['id']):
+                    st.success("✅ **Relatório adicionado com sucesso!**")
                     st.balloons()
+                    st.rerun()
                 else:
-                    st.error(f"Erro: {resultado['error']}")
+                    st.error("❌ **Erro ao salvar relatório!**")
 
-# Página: Gerenciar Usuários (apenas admin)
+# ========== GERENCIAR USUÁRIOS ==========
 elif menu == "👥 Gerenciar Usuários":
     if not is_admin:
-        st.error("⚠️ Acesso restrito aos administradores!")
+        st.error("⛔ **Acesso restrito!** Apenas administradores podem gerenciar usuários.")
         st.stop()
     
     st.title("👥 Gerenciamento de Usuários")
     
-    # Abas
-    tab1, tab2, tab3 = st.tabs(["Listar Usuários", "Criar Usuário", "Estatísticas"])
+    tab1, tab2 = st.tabs(["📋 **Lista de Usuários**", "👤 **Criar Novo Usuário**"])
     
-    # Tab 1: Listar Usuários
     with tab1:
-        usuarios = db.listar_usuarios()
+        usuarios_db = listar_usuarios()
         
-        if not usuarios:
-            st.info("Nenhum usuário cadastrado.")
+        if not usuarios_db:
+            st.info("📝 Nenhum usuário cadastrado.")
         else:
-            # Converter para DataFrame para melhor visualização
-            df_usuarios = pd.DataFrame(usuarios)
-            df_usuarios['is_admin'] = df_usuarios['is_admin'].map({1: 'Sim', 0: 'Não'})
-            df_usuarios['ativo'] = df_usuarios['ativo'].map({1: '✅ Ativo', 0: '❌ Inativo'})
-            
-            st.dataframe(
-                df_usuarios[['id', 'username', 'email', 'is_admin', 'criado_em', 'ativo']],
-                use_container_width=True,
-                hide_index=True
-            )
-            
-            # Editar usuário
-            st.subheader("Editar Usuário")
-            usuario_id = st.number_input("ID do usuário para editar", min_value=1, step=1)
-            
-            if usuario_id:
-                usuario_edit = next((u for u in usuarios if u['id'] == usuario_id), None)
-                
-                if usuario_edit:
-                    col1, col2 = st.columns(2)
+            for user in usuarios_db:
+                with st.container(border=True):
+                    col1, col2, col3 = st.columns([3, 1, 1])
                     
                     with col1:
-                        novo_username = st.text_input("Usuário", value=usuario_edit['username'])
-                        novo_email = st.text_input("Email", value=usuario_edit['email'])
+                        st.write(f"**👤 {user['username']}**")
+                        st.write(f"Tipo: {'👑 Administrador' if user['is_admin'] else '👤 Usuário comum'}")
+                        st.write(f"Criado em: {user['criado_em']}")
                     
                     with col2:
-                        nova_senha = st.text_input("Nova senha (deixe em branco para manter)", type="password")
-                        is_admin_edit = st.checkbox("Administrador", value=bool(usuario_edit['is_admin']))
-                        ativo = st.checkbox("Ativo", value=bool(usuario_edit['ativo']))
+                        if st.button("✏️ Editar", key=f"edit_{user['id']}", type="secondary"):
+                            st.session_state.editar_usuario = user['id']
                     
-                    if st.button("Atualizar Usuário", type="primary"):
-                        updates = {
-                            'username': novo_username,
-                            'email': novo_email,
-                            'is_admin': is_admin_edit,
-                            'ativo': ativo
-                        }
-                        
-                        if nova_senha:
-                            updates['password'] = nova_senha
-                        
-                        resultado = db.atualizar_usuario(usuario_id, **updates)
-                        
-                        if resultado['success']:
-                            st.success("Usuário atualizado com sucesso!")
-                            st.rerun()
-                        else:
-                            st.error(f"Erro: {resultado['error']}")
-                else:
-                    st.warning("Usuário não encontrado!")
+                    with col3:
+                        if user['username'] != "admin":
+                            if st.button("🗑️ Excluir", key=f"delete_{user['id']}", type="secondary"):
+                                conn = sqlite3.connect("portal.db")
+                                cursor = conn.cursor()
+                                cursor.execute("DELETE FROM usuarios WHERE id = ?", (user['id'],))
+                                conn.commit()
+                                conn.close()
+                                st.success(f"✅ Usuário {user['username']} excluído!")
+                                st.rerun()
     
-    # Tab 2: Criar Usuário
     with tab2:
         st.subheader("Criar Novo Usuário")
         
         with st.form("criar_usuario_form"):
-            col1, col2 = st.columns(2)
+            novo_username = st.text_input("Nome de usuário *", placeholder="Ex: joao.silva")
+            nova_senha = st.text_input("Senha *", type="password", placeholder="Mínimo 6 caracteres")
+            confirmar_senha = st.text_input("Confirmar senha *", type="password")
+            is_admin = st.checkbox("É administrador?")
             
-            with col1:
-                novo_username = st.text_input("Nome de usuário *")
-                novo_email = st.text_input("Email *")
-            
-            with col2:
-                nova_senha = st.text_input("Senha *", type="password")
-                confirmar_senha = st.text_input("Confirmar senha *", type="password")
-            
-            is_admin_novo = st.checkbox("É administrador?")
-            
-            submitted = st.form_submit_button("Criar Usuário", type="primary")
-            
-            if submitted:
-                if not all([novo_username, novo_email, nova_senha, confirmar_senha]):
-                    st.error("Preencha todos os campos obrigatórios!")
+            if st.form_submit_button("👤 **Criar Usuário**", type="primary"):
+                if not all([novo_username, nova_senha, confirmar_senha]):
+                    st.error("❌ Preencha todos os campos!")
                 elif nova_senha != confirmar_senha:
-                    st.error("As senhas não coincidem!")
+                    st.error("❌ As senhas não coincidem!")
                 elif len(nova_senha) < 6:
-                    st.error("A senha deve ter pelo menos 6 caracteres!")
+                    st.error("❌ A senha deve ter pelo menos 6 caracteres!")
                 else:
-                    resultado = db.criar_usuario(
-                        username=novo_username,
-                        email=novo_email,
-                        password=nova_senha,
-                        is_admin=is_admin_novo
-                    )
-                    
-                    if resultado['success']:
-                        st.success(f"✅ Usuário '{novo_username}' criado com ID: {resultado['user_id']}")
+                    if criar_usuario(novo_username, nova_senha, is_admin):
+                        st.success(f"✅ Usuário **{novo_username}** criado com sucesso!")
                     else:
-                        st.error(f"Erro: {resultado['error']}")
-    
-    # Tab 3: Estatísticas
-    with tab3:
-        st.subheader("📈 Estatísticas do Sistema")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("Total de Usuários", len([u for u in usuarios if u['ativo']]))
-        
-        with col2:
-            relatorios = db.listar_relatorios(ativos=True)
-            st.metric("Total de Relatórios", len(relatorios))
-        
-        with col3:
-            admins = len([u for u in usuarios if u['is_admin'] and u['ativo']])
-            st.metric("Administradores", admins)
+                        st.error("❌ Este nome de usuário já existe!")
 
-# Página: Configurações
-elif menu == "⚙️ Configurações":
-    st.title("⚙️ Configurações")
+# ========== MINHA CONTA ==========
+elif menu == "⚙️ Minha Conta":
+    st.title("⚙️ Minha Conta")
     
-    tab1, tab2 = st.tabs(["Minha Conta", "Sistema"])
+    col1, col2 = st.columns([1, 2])
     
-    # Minha Conta
-    with tab1:
-        st.subheader("Minha Conta")
+    with col1:
+        st.subheader("👤 Perfil")
+        st.write(f"**Usuário:** {usuario['username']}")
+        st.write(f"**Tipo:** {'Administrador' if is_admin else 'Usuário'}")
+    
+    with col2:
+        st.subheader("🔐 Alterar Senha")
         
-        with st.form("minha_conta_form"):
-            st.write(f"**Usuário atual:** {usuario['username']}")
+        with st.form("alterar_senha_form"):
+            senha_atual = st.text_input("Senha atual *", type="password")
+            nova_senha = st.text_input("Nova senha *", type="password")
+            confirmar_senha = st.text_input("Confirmar nova senha *", type="password")
             
-            nova_senha = st.text_input("Nova senha", type="password")
-            confirmar_senha = st.text_input("Confirmar nova senha", type="password")
-            
-            if st.form_submit_button("Alterar Senha", type="primary"):
-                if nova_senha and confirmar_senha:
-                    if nova_senha == confirmar_senha:
-                        if len(nova_senha) >= 6:
-                            resultado = db.atualizar_usuario(usuario['id'], password=nova_senha)
-                            if resultado['success']:
-                                st.success("✅ Senha alterada com sucesso!")
-                            else:
-                                st.error("Erro ao alterar senha!")
+            if st.form_submit_button("🔄 **Alterar Senha**", type="primary"):
+                if not all([senha_atual, nova_senha, confirmar_senha]):
+                    st.error("❌ Preencha todos os campos!")
+                elif nova_senha != confirmar_senha:
+                    st.error("❌ As novas senhas não coincidem!")
+                elif len(nova_senha) < 6:
+                    st.error("❌ A nova senha deve ter pelo menos 6 caracteres!")
+                else:
+                    usuario_verificado = verificar_login(usuario['username'], senha_atual)
+                    if not usuario_verificado:
+                        st.error("❌ Senha atual incorreta!")
+                    else:
+                        if atualizar_senha(usuario['id'], nova_senha):
+                            st.success("✅ Senha alterada com sucesso!")
+                            st.info("⚠️ Faça logout e login novamente para aplicar as alterações.")
                         else:
-                            st.error("A senha deve ter pelo menos 6 caracteres!")
-                    else:
-                        st.error("As senhas não coincidem!")
-                else:
-                    st.error("Preencha ambos os campos de senha!")
-    
-    # Sistema
-    with tab2:
-        st.subheader("Configurações do Sistema")
-        
-        if is_admin:
-            # Backup do banco de dados
-            if st.button("💾 Fazer Backup do Banco de Dados"):
-                import shutil
-                import datetime
-                
-                try:
-                    data_hora = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                    backup_file = f"portal_backup_{data_hora}.db"
-                    shutil.copy2("portal.db", backup_file)
-                    st.success(f"✅ Backup criado: `{backup_file}`")
-                    st.download_button(
-                        label="📥 Baixar Backup",
-                        data=open(backup_file, 'rb'),
-                        file_name=backup_file,
-                        mime="application/x-sqlite3"
-                    )
-                except Exception as e:
-                    st.error(f"Erro ao criar backup: {e}")
-            
-            # Restaurar backup
-            st.markdown("---")
-            st.subheader("Restaurar Backup")
-            
-            uploaded_file = st.file_uploader("Selecione um arquivo .db para restaurar", type=['db'])
-            
-            if uploaded_file and st.button("🔄 Restaurar Backup", type="secondary"):
-                try:
-                    with open("portal_restore.db", "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    
-                    st.warning("⚠️ **ATENÇÃO:** Esta ação irá substituir o banco atual!")
-                    
-                    if st.button("✅ Confirmar Restauração"):
-                        import os
-                        os.replace("portal_restore.db", "portal.db")
-                        st.success("✅ Banco de dados restaurado com sucesso!")
-                        st.info("Recarregue a página para aplicar as alterações.")
-                except Exception as e:
-                    st.error(f"Erro ao restaurar: {e}")
-        else:
-            st.info("Apenas administradores podem acessar estas configurações.")
+                            st.error("❌ Erro ao alterar senha!")
 
-# Rodapé
+# ========== RODAPÉ ==========
 st.markdown("---")
-st.caption(f"Portal Power BI v1.0 | Usuário: {usuario['username']} | paineis-grupofrt.streamlit.app | SQLite Database")
+st.caption(f"📊 Portal Power BI v1.0 | 🏢 Grupo FRT | 👤 {usuario['username']} | 🌐 paineis-grupofrt.streamlit.app")
