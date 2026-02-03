@@ -385,4 +385,4 @@ elif menu == "⚙️ Configurações":
 
 # Rodapé
 st.markdown("---")
-st.caption(f"Portal Power BI v1.0 | Usuário: {usuario['username']} | SQLite Database")
+st.caption(f"Portal Power BI v1.0 | Usuário: {usuario['username']} | paineis-grupofrt.streamlit.app | SQLite Database")
