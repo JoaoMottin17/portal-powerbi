@@ -2,6 +2,7 @@ import streamlit as st
 import sqlite3
 import hashlib
 import re
+import os
 
 # ========== CONFIGURAÇÃO ==========
 st.set_page_config(
@@ -12,13 +13,19 @@ st.set_page_config(
 
 # ========== BANCO DE DADOS ==========
 def init_db():
-    """Inicializar banco de dados"""
+    """Inicializar banco de dados - FORÇAR RECRIAÇÃO"""
+    # Primeiro, apagar banco antigo se existir
+    try:
+        os.remove("portal.db")
+    except:
+        pass
+    
     conn = sqlite3.connect("portal.db")
     cursor = conn.cursor()
     
     # Usuários
     cursor.execute('''
-    CREATE TABLE IF NOT EXISTS usuarios (
+    CREATE TABLE usuarios (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
@@ -28,7 +35,7 @@ def init_db():
     
     # Relatórios
     cursor.execute('''
-    CREATE TABLE IF NOT EXISTS relatorios (
+    CREATE TABLE relatorios (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         titulo TEXT NOT NULL,
         link_powerbi TEXT NOT NULL,
@@ -39,14 +46,12 @@ def init_db():
         FOREIGN KEY (criado_por) REFERENCES usuarios(id)
     )''')
     
-    # Verificar se admin existe
-    cursor.execute("SELECT COUNT(*) FROM usuarios WHERE username = 'admin'")
-    if cursor.fetchone()[0] == 0:
-        # SENHA CORRETA: admin123
-        password_hash = hashlib.sha256(b"admin123_salt_grupofrt").hexdigest()
-        cursor.execute('''
-        INSERT INTO usuarios (username, password_hash, is_admin)
-        VALUES (?, ?, ?)''', ('admin', password_hash, 1))
+    # Criar admin com senha CORRETA
+    # SENHA: admin123
+    password_hash = hashlib.sha256(b"admin123_salt_grupofrt").hexdigest()
+    cursor.execute('''
+    INSERT INTO usuarios (username, password_hash, is_admin)
+    VALUES (?, ?, ?)''', ('admin', password_hash, 1))
     
     conn.commit()
     conn.close()
@@ -208,7 +213,7 @@ def validar_link_powerbi(link):
     return False
 
 # ========== INICIALIZAR ==========
-init_db()
+init_db()  # Isso SEMPRE recria o banco com admin123
 
 # ========== VERIFICAR LOGIN ==========
 if "usuario" not in st.session_state:
