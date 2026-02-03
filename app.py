@@ -96,31 +96,70 @@ if menu == "📊 Dashboard":
                         st.markdown(f"**Tags:** {tags_html}")
                 
                 with col_b:
-                    if st.button("Abrir", key=f"abrir_{relatorio['id']}", type="secondary"):
-                        # Registrar acesso
-                        db.registrar_acesso(usuario['id'], relatorio['id'])
-                        
-                        # Mostrar iframe
-                        st.markdown("---")
-                        st.subheader(relatorio['titulo'])
-                        
-                        # Extrair e ajustar link para embed
-                        link = relatorio['link_powerbi']
-                        if "embed" not in link and "view" in link:
-                            link = link.replace("view", "embed")
-                        
-                        # Usar HTML para iframe
-                        st.markdown(f"""
-                        <iframe 
-                            width="100%" 
-                            height="600" 
-                            src="{link}" 
-                            frameborder="0" 
-                            allowfullscreen>
-                        </iframe>
-                        """, unsafe_allow_html=True)
-                        
-                        st.markdown(f"[Abrir em nova janela]({relatorio['link_powerbi']})")
+                   if st.button("Abrir", key=f"abrir_{relatorio['id']}", type="secondary"):
+    # Registrar acesso
+    db.registrar_acesso(usuario['id'], relatorio['id'])
+    
+    st.markdown("---")
+    st.subheader(relatorio['titulo'])
+    
+    # Preparar link para abrir em NOVA ABA
+    link = relatorio['link_powerbi']
+    
+    # Garantir que é link de "view" (não embed) para abrir corretamente
+    if "embed" in link:
+        link = link.replace("embed", "view")
+    
+    # Botão bonito para abrir em nova aba
+    st.markdown(f"""
+    <div style="text-align: center; margin: 30px 0;">
+        <a href="{link}" target="_blank" style="text-decoration: none;">
+            <div style="
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 18px 35px;
+                border-radius: 12px;
+                font-size: 18px;
+                font-weight: bold;
+                cursor: pointer;
+                box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+                transition: all 0.3s ease;
+                display: inline-flex;
+                align-items: center;
+                gap: 12px;
+                border: none;
+                outline: none;
+            " 
+            onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 10px 20px rgba(0, 0, 0, 0.2)';"
+            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 6px 12px rgba(0, 0, 0, 0.15)';"
+            onclick="window.open('{link}', '_blank'); return false;"
+            >
+            <span style="font-size: 24px;">📊</span>
+            <span>ABRIR RELATÓRIO DO POWER BI</span>
+            <span style="font-size: 24px;">↗️</span>
+            </div>
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Também mostrar o link como texto para cópia
+    with st.expander("📋 **Copiar link manualmente**"):
+        st.code(link, language="text")
+        
+        # Botão para "copiar" (visual)
+        if st.button("📋 Copiar link para área de transferência", 
+                    key=f"copy_{relatorio['id']}", 
+                    type="secondary"):
+            st.success("✅ Link copiado! Use Ctrl+V para colar.")
+            # Nota: Em produção real, precisaria de JavaScript para copiar realmente
+    
+    # Informações adicionais
+    st.info("""
+    **💡 Dica:** 
+    - O relatório abrirá em uma **nova aba/guia** do seu navegador
+    - Mantenha esta aba aberta para voltar ao portal
+    - Use **Ctrl+Clique** para abrir sem sair desta página
+    """)
                 
                 # Botões de admin
                 if is_admin or relatorio['criado_por'] == usuario['id']:
