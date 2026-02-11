@@ -33,9 +33,14 @@ def get_database() -> Database:
 db = get_database()
 
 
-def render_logo(width: int):
-    if os.path.exists("logo.png"):
-        st.image("logo.png", width=width)
+def render_logo(width: int, path: str = "logo.png"):
+    if os.path.exists(path):
+        st.image(path, width=width)
+
+
+def render_logo_janelas(width: int = 520):
+    janelas_logo = "logo_janelas.png" if os.path.exists("logo_janelas.png") else "logo.png"
+    render_logo(width, janelas_logo)
 
 
 def init_db():
@@ -153,12 +158,12 @@ if "usuario" not in st.session_state:
     st.session_state.usuario = None
 
 if not st.session_state.usuario:
-    col_logo, col_titulo = st.columns([1, 3])
-    with col_logo:
-        render_logo(260)
-    with col_titulo:
-        st.title("Portal Power BI")
-        st.subheader("Grupo FRT")
+    col_logo_center_l, col_logo_center, col_logo_center_r = st.columns([1, 2, 1])
+    with col_logo_center:
+        render_logo_janelas(560)
+
+    st.title("Portal Power BI")
+    st.subheader("Grupo FRT")
 
     st.markdown("---")
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -190,7 +195,8 @@ usuario = st.session_state.usuario
 is_admin = usuario["is_admin"]
 
 with st.sidebar:
-    render_logo(160)
+    sidebar_logo = "logo_sidebar.png" if os.path.exists("logo_sidebar.png") else "logo.png"
+    render_logo(160, sidebar_logo)
     st.markdown("---")
     st.markdown(
         """
@@ -221,21 +227,18 @@ with st.sidebar:
         st.rerun()
 
 
-col_logo_header, col_title_header = st.columns([1, 4])
-with col_logo_header:
-    render_logo(90)
-with col_title_header:
-    if menu == "Dashboard":
-        st.title("Dashboard de Relatorios")
-    elif menu == "Novo Relatorio":
-        if "editar_relatorio" in st.session_state:
-            st.title("Editar relatorio")
-        else:
-            st.title("Adicionar novo relatorio")
-    elif menu == "Gerenciar Usuarios":
-        st.title("Gerenciamento de usuarios")
+render_logo_janelas(560)
+if menu == "Dashboard":
+    st.title("Dashboard de Relatorios")
+elif menu == "Novo Relatorio":
+    if "editar_relatorio" in st.session_state:
+        st.title("Editar relatorio")
     else:
-        st.title("Minha conta")
+        st.title("Adicionar novo relatorio")
+elif menu == "Gerenciar Usuarios":
+    st.title("Gerenciamento de usuarios")
+else:
+    st.title("Minha conta")
 
 st.markdown("---")
 
