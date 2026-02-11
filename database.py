@@ -2,7 +2,7 @@ import hashlib
 import os
 
 import streamlit as st
-from passlib.context import CryptContext
+from passlib.hash import pbkdf2_sha256
 import psycopg
 from supabase import create_client
 
@@ -22,7 +22,6 @@ CATEGORIAS_PADRAO = [
 
 class Database:
     def __init__(self):
-        self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
         self.supabase = self._create_client()
         self.init_database()
 
@@ -106,7 +105,7 @@ class Database:
                 cur.execute(schema_sql)
 
     def hash_password(self, password: str) -> str:
-        return self.pwd_context.hash(password)
+        return pbkdf2_sha256.hash(password)
 
     @staticmethod
     def _legacy_hash_password(password: str) -> str:
@@ -122,10 +121,10 @@ class Database:
         return CATEGORIAS_PADRAO if is_admin else []
 
     def _verify_password(self, password: str, stored_hash: str):
-        # Tenta verificar hash bcrypt atual.
+        # Tenta verificar hash moderno (pbkdf2_sha256).
         try:
-            if self.pwd_context.identify(stored_hash) and self.pwd_context.verify(password, stored_hash):
-                return True, False
+            if stored_hash and stored_hash.startswith("$pbkdf2-sha256$"):
+                return pbkdf2_sha256.verify(password, stored_hash), False
         except Exception:
             pass
 

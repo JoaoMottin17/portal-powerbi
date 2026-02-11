@@ -1,4 +1,4 @@
 streamlit
-passlib[bcrypt]
+passlib
 supabase
 psycopg[binary]
