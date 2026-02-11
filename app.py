@@ -1,8 +1,10 @@
 import os
 import re
 import base64
+from html import escape
 
 import streamlit as st
+import streamlit.components.v1 as components
 from database import Database
 
 
@@ -261,6 +263,41 @@ def validar_link_powerbi(link):
     return False
 
 
+def render_powerbi_fullscreen(relatorio):
+    st.subheader(f"📺 Visualizando: {relatorio['titulo']}")
+    st.caption("Visualizacao interna para teste no portal.")
+
+    col_back, col_open = st.columns([1, 1])
+    with col_back:
+        if st.button("↩ Voltar ao dashboard", type="secondary", use_container_width=True):
+            if "relatorio_em_tela" in st.session_state:
+                del st.session_state["relatorio_em_tela"]
+            st.rerun()
+    with col_open:
+        st.link_button("🌐 Abrir em nova aba", relatorio["link_powerbi"], use_container_width=True)
+
+    link = relatorio["link_powerbi"]
+    if "embed" not in link.lower():
+        st.warning("Para melhor resultado no iframe, use um link de embed do Power BI.")
+
+    iframe_src = escape(link, quote=True)
+    components.html(
+        f"""
+        <div style="width:100%;height:86vh;border:1px solid #d6d8db;border-radius:10px;overflow:hidden;background:#fff;">
+            <iframe
+                src="{iframe_src}"
+                width="100%"
+                height="100%"
+                style="border:0;"
+                allowfullscreen="true">
+            </iframe>
+        </div>
+        """,
+        height=920,
+        scrolling=False,
+    )
+
+
 init_db()
 apply_professional_theme()
 
@@ -352,6 +389,15 @@ st.markdown("---")
 
 if menu == MENU_DASHBOARD:
     relatorios = listar_relatorios(usuario)
+    if st.session_state.get("relatorio_em_tela"):
+        relatorio_tela = obter_relatorio_por_id(st.session_state["relatorio_em_tela"])
+        if relatorio_tela is None:
+            st.error("Relatorio selecionado nao foi encontrado.")
+            del st.session_state["relatorio_em_tela"]
+        else:
+            render_powerbi_fullscreen(relatorio_tela)
+            st.stop()
+
     if not relatorios:
         st.info("Nenhum relatorio disponivel nas suas categorias.")
     else:
@@ -385,10 +431,9 @@ if menu == MENU_DASHBOARD:
                         st.write(f"Atualizado em: {relatorio['atualizado_em']}")
 
                 with col_btn:
-                    link = relatorio["link_powerbi"]
-                    if "embed" in link:
-                        link = link.replace("embed", "view")
-                    st.link_button("📊 Abrir Power BI", link, use_container_width=True)
+                    if st.button("📊 Abrir no portal", key=f"open_{relatorio['id']}", use_container_width=True):
+                        st.session_state["relatorio_em_tela"] = relatorio["id"]
+                        st.rerun()
 
                 st.markdown("---")
                 c2, c3 = st.columns(2)
