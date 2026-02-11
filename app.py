@@ -46,6 +46,66 @@ def render_logo_janelas(width: int = 520):
     render_logo(width, janelas_logo)
 
 
+def apply_professional_theme():
+    st.markdown(
+        """
+        <style>
+            .stApp {
+                background: #f7f8fa;
+            }
+            .block-container {
+                padding-top: 1.2rem;
+            }
+            [data-testid="stSidebar"] {
+                background: #eef1f5;
+            }
+            .portal-kicker {
+                margin: 0;
+                text-align: center;
+                color: #5f6b7a;
+                font-size: 0.95rem;
+                font-weight: 500;
+            }
+            .portal-title {
+                margin: 0.2rem 0 0.8rem 0;
+                color: #1d2733;
+                font-size: 2.6rem;
+                font-weight: 700;
+                letter-spacing: -0.02em;
+            }
+            .sidebar-brand {
+                margin: 0 0 0.35rem 0;
+                text-align: center;
+                color: #0f365f;
+                font-size: 1.7rem;
+                font-weight: 700;
+            }
+            .sidebar-subtitle {
+                margin: 0.2rem 0 0.1rem 0;
+                text-align: center;
+                color: #6b7280;
+                font-size: 0.95rem;
+                font-weight: 500;
+            }
+            .sidebar-user {
+                margin: 0;
+                color: #1f2937;
+                font-size: 1.02rem;
+                font-weight: 600;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_page_header(title_text: str):
+    col_l, col_c, col_r = st.columns([1, 6, 1])
+    with col_c:
+        render_logo_janelas(430)
+    st.markdown(f'<h1 class="portal-title">{title_text}</h1>', unsafe_allow_html=True)
+
+
 def init_db():
     try:
         db.init_database()
@@ -156,6 +216,7 @@ def validar_link_powerbi(link):
 
 
 init_db()
+apply_professional_theme()
 
 if "usuario" not in st.session_state:
     st.session_state.usuario = None
@@ -163,10 +224,10 @@ if "usuario" not in st.session_state:
 if not st.session_state.usuario:
     col_logo_center_l, col_logo_center, col_logo_center_r = st.columns([1, 2, 1])
     with col_logo_center:
-        render_logo_janelas(560)
+        render_logo_janelas(460)
 
-    st.title("Portal Power BI")
-    st.subheader("Grupo FRT")
+    st.markdown('<p class="portal-kicker">Grupo FRT</p>', unsafe_allow_html=True)
+    st.markdown('<h1 class="portal-title">Portal Power BI</h1>', unsafe_allow_html=True)
 
     st.markdown("---")
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -199,22 +260,11 @@ is_admin = usuario["is_admin"]
 
 with st.sidebar:
     sidebar_logo = "logo_sidebar.png" if os.path.exists("logo_sidebar.png") else "logo.png"
-    st.markdown(
-        """
-        <div style="text-align:center;margin-bottom:20px;">
-            <h2 style="color:#0E2C4D;">Grupo FRT</h2>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    render_logo(180, sidebar_logo, use_container_width=False)
-    st.markdown(
-        '<p style="text-align:center;color:#666;font-size:14px;">Portal Power BI</p>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<h2 class="sidebar-brand">Grupo FRT</h2>', unsafe_allow_html=True)
+    render_logo(150, sidebar_logo, use_container_width=False)
+    st.markdown('<p class="sidebar-subtitle">Portal Power BI</p>', unsafe_allow_html=True)
     st.markdown("---")
-    st.markdown("---")
-    st.write(f"Usuario: {usuario['username']}")
+    st.markdown(f'<p class="sidebar-user">Usuario: {usuario["username"]}</p>', unsafe_allow_html=True)
     if is_admin:
         st.success("Administrador")
     else:
@@ -232,19 +282,17 @@ with st.sidebar:
         st.session_state.usuario = None
         st.rerun()
 
-
-render_logo_janelas(560)
 if menu == "Dashboard":
-    st.title("Dashboard de Relatorios")
+    render_page_header("Dashboard de Relatorios")
 elif menu == "Novo Relatorio":
     if "editar_relatorio" in st.session_state:
-        st.title("Editar relatorio")
+        render_page_header("Editar relatorio")
     else:
-        st.title("Adicionar novo relatorio")
+        render_page_header("Adicionar novo relatorio")
 elif menu == "Gerenciar Usuarios":
-    st.title("Gerenciamento de usuarios")
+    render_page_header("Gerenciamento de usuarios")
 else:
-    st.title("Minha conta")
+    render_page_header("Minha conta")
 
 st.markdown("---")
 
