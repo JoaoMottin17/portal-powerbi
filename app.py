@@ -33,6 +33,11 @@ def get_database() -> Database:
 db = get_database()
 
 
+def render_logo(width: int):
+    if os.path.exists("logo.png"):
+        st.image("logo.png", width=width)
+
+
 def init_db():
     try:
         db.init_database()
@@ -150,8 +155,7 @@ if "usuario" not in st.session_state:
 if not st.session_state.usuario:
     col_logo, col_titulo = st.columns([1, 3])
     with col_logo:
-        if os.path.exists("logo.png"):
-            st.image("logo.png", width=260)
+        render_logo(260)
     with col_titulo:
         st.title("Portal Power BI")
         st.subheader("Grupo FRT")
@@ -186,6 +190,8 @@ usuario = st.session_state.usuario
 is_admin = usuario["is_admin"]
 
 with st.sidebar:
+    render_logo(160)
+    st.markdown("---")
     st.markdown(
         """
         <div style="text-align:center;margin-bottom:20px;">
@@ -215,17 +221,21 @@ with st.sidebar:
         st.rerun()
 
 
-if menu == "Dashboard":
-    st.title("Dashboard de Relatorios")
-elif menu == "Novo Relatorio":
-    if "editar_relatorio" in st.session_state:
-        st.title("Editar relatorio")
+col_logo_header, col_title_header = st.columns([1, 4])
+with col_logo_header:
+    render_logo(90)
+with col_title_header:
+    if menu == "Dashboard":
+        st.title("Dashboard de Relatorios")
+    elif menu == "Novo Relatorio":
+        if "editar_relatorio" in st.session_state:
+            st.title("Editar relatorio")
+        else:
+            st.title("Adicionar novo relatorio")
+    elif menu == "Gerenciar Usuarios":
+        st.title("Gerenciamento de usuarios")
     else:
-        st.title("Adicionar novo relatorio")
-elif menu == "Gerenciar Usuarios":
-    st.title("Gerenciamento de usuarios")
-else:
-    st.title("Minha conta")
+        st.title("Minha conta")
 
 st.markdown("---")
 
