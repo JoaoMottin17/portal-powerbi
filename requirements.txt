@@ -1,3 +1,4 @@
 streamlit
-passlib
-pandas
+passlib[bcrypt]
+supabase
+psycopg[binary]
