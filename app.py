@@ -24,6 +24,11 @@ CATEGORIAS_PADRAO = [
     "Operacional",
 ]
 
+MENU_DASHBOARD = "📊 Dashboard"
+MENU_NOVO_RELATORIO = "➕ Novo Relatorio"
+MENU_GERENCIAR_USUARIOS = "👥 Gerenciar Usuarios"
+MENU_MINHA_CONTA = "⚙️ Minha Conta"
+
 
 @st.cache_resource
 def get_database() -> Database:
@@ -92,6 +97,15 @@ def apply_professional_theme():
                 color: #1f2937;
                 font-size: 1.02rem;
                 font-weight: 600;
+            }
+            .stButton > button[kind="primary"] {
+                background: linear-gradient(90deg, #0f7b3a 0%, #2fa84f 100%);
+                border: none;
+                color: #ffffff;
+                font-weight: 700;
+            }
+            .stButton > button[kind="primary"]:hover {
+                filter: brightness(0.96);
             }
         </style>
         """,
@@ -227,16 +241,16 @@ if not st.session_state.usuario:
         render_logo_janelas(460)
 
     st.markdown('<p class="portal-kicker">Grupo FRT</p>', unsafe_allow_html=True)
-    st.markdown('<h1 class="portal-title">Portal Power BI</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="portal-title">📈 Portal Power BI</h1>', unsafe_allow_html=True)
 
     st.markdown("---")
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         with st.form("login_form", border=False):
-            st.subheader("Acesso ao sistema")
+            st.subheader("🔐 Acesso ao sistema")
             username = st.text_input("Usuario", placeholder="Digite seu usuario")
             senha = st.text_input("Senha", type="password", placeholder="Digite sua senha")
-            if st.form_submit_button("Entrar", use_container_width=True):
+            if st.form_submit_button("🚀 Entrar", use_container_width=True, type="primary"):
                 if username and senha:
                     usuario = verificar_login(username, senha)
                     if usuario:
@@ -274,30 +288,30 @@ with st.sidebar:
     st.markdown("---")
     menu = st.radio(
         "Menu principal",
-        ["Dashboard", "Novo Relatorio", "Gerenciar Usuarios", "Minha Conta"],
+        [MENU_DASHBOARD, MENU_NOVO_RELATORIO, MENU_GERENCIAR_USUARIOS, MENU_MINHA_CONTA],
         label_visibility="collapsed",
     )
     st.markdown("---")
-    if st.button("Sair", use_container_width=True, type="secondary"):
+    if st.button("🚪 Sair", use_container_width=True, type="secondary"):
         st.session_state.usuario = None
         st.rerun()
 
-if menu == "Dashboard":
-    render_page_header("Dashboard de Relatorios")
-elif menu == "Novo Relatorio":
+if menu == MENU_DASHBOARD:
+    render_page_header("📊 Dashboard de Relatorios")
+elif menu == MENU_NOVO_RELATORIO:
     if "editar_relatorio" in st.session_state:
-        render_page_header("Editar relatorio")
+        render_page_header("✏️ Editar relatorio")
     else:
-        render_page_header("Adicionar novo relatorio")
-elif menu == "Gerenciar Usuarios":
-    render_page_header("Gerenciamento de usuarios")
+        render_page_header("➕ Adicionar novo relatorio")
+elif menu == MENU_GERENCIAR_USUARIOS:
+    render_page_header("👥 Gerenciamento de usuarios")
 else:
-    render_page_header("Minha conta")
+    render_page_header("⚙️ Minha conta")
 
 st.markdown("---")
 
 
-if menu == "Dashboard":
+if menu == MENU_DASHBOARD:
     relatorios = listar_relatorios(usuario)
     if not relatorios:
         st.info("Nenhum relatorio disponivel nas suas categorias.")
@@ -320,7 +334,7 @@ if menu == "Dashboard":
                 if termo in r["titulo"].lower() or (r["descricao"] and termo in r["descricao"].lower())
             ]
 
-        st.subheader(f"Relatorios disponiveis ({len(relatorios_filtrados)})")
+        st.subheader(f"📋 Relatorios disponiveis ({len(relatorios_filtrados)})")
         for relatorio in relatorios_filtrados:
             with st.expander(f"{relatorio['titulo']} - {relatorio['categoria']}"):
                 col_info, col_btn = st.columns([3, 1])
@@ -335,26 +349,26 @@ if menu == "Dashboard":
                     link = relatorio["link_powerbi"]
                     if "embed" in link:
                         link = link.replace("embed", "view")
-                    st.link_button("Abrir Power BI", link, use_container_width=True)
+                    st.link_button("📊 Abrir Power BI", link, use_container_width=True)
 
                 st.markdown("---")
                 st.code(link, language="text")
                 c1, c2, c3 = st.columns(3)
                 with c1:
-                    if st.button("Copiar link", key=f"copy_{relatorio['id']}"):
+                    if st.button("📋 Copiar link", key=f"copy_{relatorio['id']}"):
                         st.success("Link copiado.")
                 if is_admin or relatorio["criado_por"] == usuario["id"]:
                     with c2:
-                        if st.button("Editar", key=f"edit_{relatorio['id']}"):
+                        if st.button("✏️ Editar", key=f"edit_{relatorio['id']}"):
                             st.session_state["editar_relatorio"] = relatorio["id"]
                             st.rerun()
                     with c3:
-                        if st.button("Excluir", key=f"del_{relatorio['id']}"):
+                        if st.button("🗑️ Excluir", key=f"del_{relatorio['id']}"):
                             if excluir_relatorio(relatorio["id"]):
                                 st.success("Relatorio excluido.")
                                 st.rerun()
 
-elif menu == "Novo Relatorio":
+elif menu == MENU_NOVO_RELATORIO:
     if "editar_relatorio" in st.session_state:
         relatorio = obter_relatorio_por_id(st.session_state["editar_relatorio"])
         modo_edicao = relatorio is not None
@@ -379,7 +393,7 @@ elif menu == "Novo Relatorio":
         if modo_edicao:
             col_salvar, col_cancelar = st.columns(2)
             with col_salvar:
-                if st.form_submit_button("Salvar alteracoes", type="primary", use_container_width=True):
+                if st.form_submit_button("💾 Salvar alteracoes", type="primary", use_container_width=True):
                     if not titulo or not link:
                         st.error("Preencha os campos obrigatorios.")
                     elif not validar_link_powerbi(link):
@@ -390,11 +404,11 @@ elif menu == "Novo Relatorio":
                             del st.session_state["editar_relatorio"]
                             st.rerun()
             with col_cancelar:
-                if st.form_submit_button("Cancelar", type="secondary", use_container_width=True):
+                if st.form_submit_button("❌ Cancelar", type="secondary", use_container_width=True):
                     del st.session_state["editar_relatorio"]
                     st.rerun()
         else:
-            if st.form_submit_button("Salvar relatorio", type="primary", use_container_width=True):
+            if st.form_submit_button("💾 Salvar relatorio", type="primary", use_container_width=True):
                 if not titulo or not link:
                     st.error("Preencha os campos obrigatorios.")
                 elif not validar_link_powerbi(link):
@@ -404,15 +418,15 @@ elif menu == "Novo Relatorio":
                         st.success("Relatorio adicionado com sucesso.")
                         st.rerun()
 
-elif menu == "Gerenciar Usuarios":
+elif menu == MENU_GERENCIAR_USUARIOS:
     if not is_admin:
         st.error("Acesso restrito. Apenas administradores podem gerenciar usuarios.")
         st.stop()
 
     if "editar_usuario_id" in st.session_state:
-        tab1, tab2 = st.tabs(["Editar usuario", "Lista de usuarios"])
+        tab1, tab2 = st.tabs(["✏️ Editar usuario", "📋 Lista de usuarios"])
     else:
-        tab1, tab2 = st.tabs(["Criar novo usuario", "Lista de usuarios"])
+        tab1, tab2 = st.tabs(["👤 Criar novo usuario", "📋 Lista de usuarios"])
 
     with tab1:
         if "editar_usuario_id" in st.session_state:
@@ -521,20 +535,20 @@ elif menu == "Gerenciar Usuarios":
                                 st.write(f"... e mais {len(user['categorias_permitidas']) - 5}")
                         st.write(f"Criado em: {user['criado_em']}")
                     with c2:
-                        if st.button("Editar", key=f"edit_{user['id']}", type="secondary"):
+                        if st.button("✏️ Editar", key=f"edit_{user['id']}", type="secondary"):
                             st.session_state["editar_usuario_id"] = user["id"]
                             st.rerun()
                     with c3:
                         if user["username"] != "admin":
-                            if st.button("Excluir", key=f"delete_{user['id']}", type="secondary"):
+                            if st.button("🗑️ Excluir", key=f"delete_{user['id']}", type="secondary"):
                                 if excluir_usuario(user["id"]):
                                     st.success(f"Usuario {user['username']} excluido.")
                                     st.rerun()
 
-elif menu == "Minha Conta":
+elif menu == MENU_MINHA_CONTA:
     col1, col2 = st.columns([1, 2])
     with col1:
-        st.subheader("Perfil")
+        st.subheader("👤 Perfil")
         st.write(f"Usuario: {usuario['username']}")
         st.write(f"Tipo: {'Administrador' if is_admin else 'Usuario'}")
         if not is_admin:
@@ -543,12 +557,12 @@ elif menu == "Minha Conta":
                 st.write(f"- {cat}")
 
     with col2:
-        st.subheader("Alterar senha")
+        st.subheader("🔐 Alterar senha")
         with st.form("alterar_senha_form"):
             senha_atual = st.text_input("Senha atual *", type="password")
             nova_senha = st.text_input("Nova senha *", type="password")
             confirmar_senha = st.text_input("Confirmar nova senha *", type="password")
-            if st.form_submit_button("Alterar senha", type="primary"):
+            if st.form_submit_button("🔄 Alterar senha", type="primary"):
                 if not all([senha_atual, nova_senha, confirmar_senha]):
                     st.error("Preencha todos os campos.")
                 elif nova_senha != confirmar_senha:
