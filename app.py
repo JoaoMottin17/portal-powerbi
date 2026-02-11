@@ -249,7 +249,6 @@ if not st.session_state.usuario:
     with col_logo_center:
         render_logo_janelas(340)
 
-    st.markdown('<p class="portal-kicker">Grupo FRT</p>', unsafe_allow_html=True)
     st.markdown('<h1 class="portal-title">📈 Portal Power BI</h1>', unsafe_allow_html=True)
 
     st.markdown("---")
