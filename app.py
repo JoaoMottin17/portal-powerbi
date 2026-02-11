@@ -48,7 +48,12 @@ def render_logo(width: int, path: str = "logo.png", use_container_width: bool = 
 
 
 def render_logo_janelas(width: int = 520):
-    janelas_logo = "logo_janelas.png" if os.path.exists("logo_janelas.png") else "logo.png"
+    if os.path.exists("logo_janelas_1.png"):
+        janelas_logo = "logo_janelas_1.png"
+    elif os.path.exists("logo_janelas.png"):
+        janelas_logo = "logo_janelas.png"
+    else:
+        janelas_logo = "logo.png"
     render_logo(width, janelas_logo)
 
 
@@ -96,7 +101,7 @@ def apply_professional_theme():
                 letter-spacing: -0.02em;
             }
             .sidebar-brand {
-                margin: 0 0 0.35rem 0;
+                margin: -0.35rem 0 0.05rem 0;
                 text-align: center;
                 color: #0f365f;
                 font-size: 2.2rem;
@@ -104,11 +109,14 @@ def apply_professional_theme():
                 letter-spacing: -0.01em;
             }
             .sidebar-subtitle {
-                margin: 0.2rem 0 0.1rem 0;
+                margin: 0 0 0.1rem 0;
                 text-align: center;
                 color: #6b7280;
                 font-size: 0.95rem;
                 font-weight: 500;
+            }
+            [data-testid="stSidebar"] [data-testid="stImage"] {
+                margin-bottom: 0 !important;
             }
             .sidebar-user {
                 margin: 0;
@@ -138,7 +146,12 @@ def apply_professional_theme():
 
 
 def render_page_header(title_text: str):
-    logo_path = "logo_janelas.png" if os.path.exists("logo_janelas.png") else "logo.png"
+    if os.path.exists("logo_janelas_1.png"):
+        logo_path = "logo_janelas_1.png"
+    elif os.path.exists("logo_janelas.png"):
+        logo_path = "logo_janelas.png"
+    else:
+        logo_path = "logo.png"
     render_logo_centered(logo_path, 460, top_margin=42)
     st.markdown(f'<h1 class="portal-title">{title_text}</h1>', unsafe_allow_html=True)
 
@@ -259,7 +272,12 @@ if "usuario" not in st.session_state:
     st.session_state.usuario = None
 
 if not st.session_state.usuario:
-    logo_path = "logo_janelas.png" if os.path.exists("logo_janelas.png") else "logo.png"
+    if os.path.exists("logo_janelas_1.png"):
+        logo_path = "logo_janelas_1.png"
+    elif os.path.exists("logo_janelas.png"):
+        logo_path = "logo_janelas.png"
+    else:
+        logo_path = "logo.png"
     render_logo_centered(logo_path, 430, top_margin=52)
 
     st.markdown('<h1 class="portal-title">📈 Portal Power BI</h1>', unsafe_allow_html=True)
