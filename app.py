@@ -33,9 +33,12 @@ def get_database() -> Database:
 db = get_database()
 
 
-def render_logo(width: int, path: str = "logo.png"):
+def render_logo(width: int, path: str = "logo.png", use_container_width: bool = False):
     if os.path.exists(path):
-        st.image(path, width=width)
+        if use_container_width:
+            st.image(path, use_container_width=True)
+        else:
+            st.image(path, width=width)
 
 
 def render_logo_janelas(width: int = 520):
@@ -196,7 +199,7 @@ is_admin = usuario["is_admin"]
 
 with st.sidebar:
     sidebar_logo = "logo_sidebar.png" if os.path.exists("logo_sidebar.png") else "logo.png"
-    render_logo(160, sidebar_logo)
+    render_logo(160, sidebar_logo, use_container_width=True)
     st.markdown("---")
     st.markdown(
         """
