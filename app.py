@@ -82,8 +82,9 @@ def apply_professional_theme():
                 margin: 0 0 0.35rem 0;
                 text-align: center;
                 color: #0f365f;
-                font-size: 1.7rem;
+                font-size: 2.2rem;
                 font-weight: 700;
+                letter-spacing: -0.01em;
             }
             .sidebar-subtitle {
                 margin: 0.2rem 0 0.1rem 0;
@@ -107,6 +108,12 @@ def apply_professional_theme():
             .stButton > button[kind="primary"]:hover {
                 filter: brightness(0.96);
             }
+            [data-testid="stSidebar"] img,
+            [data-testid="stMainBlockContainer"] img {
+                object-fit: contain !important;
+                height: auto !important;
+                max-width: 100% !important;
+            }
         </style>
         """,
         unsafe_allow_html=True,
@@ -114,9 +121,9 @@ def apply_professional_theme():
 
 
 def render_page_header(title_text: str):
-    col_l, col_c, col_r = st.columns([1, 6, 1])
+    col_l, col_c, col_r = st.columns([1, 5, 1])
     with col_c:
-        render_logo_janelas(430)
+        render_logo(0, "logo_janelas.png" if os.path.exists("logo_janelas.png") else "logo.png", use_container_width=True)
     st.markdown(f'<h1 class="portal-title">{title_text}</h1>', unsafe_allow_html=True)
 
 
@@ -238,7 +245,7 @@ if "usuario" not in st.session_state:
 if not st.session_state.usuario:
     col_logo_center_l, col_logo_center, col_logo_center_r = st.columns([1, 2, 1])
     with col_logo_center:
-        render_logo_janelas(460)
+        render_logo(0, "logo_janelas.png" if os.path.exists("logo_janelas.png") else "logo.png", use_container_width=True)
 
     st.markdown('<p class="portal-kicker">Grupo FRT</p>', unsafe_allow_html=True)
     st.markdown('<h1 class="portal-title">📈 Portal Power BI</h1>', unsafe_allow_html=True)
@@ -275,7 +282,7 @@ is_admin = usuario["is_admin"]
 with st.sidebar:
     sidebar_logo = "logo_sidebar.png" if os.path.exists("logo_sidebar.png") else "logo.png"
     st.markdown('<h2 class="sidebar-brand">Grupo FRT</h2>', unsafe_allow_html=True)
-    render_logo(150, sidebar_logo, use_container_width=False)
+    render_logo(0, sidebar_logo, use_container_width=True)
     st.markdown('<p class="sidebar-subtitle">Portal Power BI</p>', unsafe_allow_html=True)
     st.markdown("---")
     st.markdown(f'<p class="sidebar-user">Usuario: {usuario["username"]}</p>', unsafe_allow_html=True)
