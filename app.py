@@ -278,19 +278,19 @@ def validar_link_powerbi(link):
 
 def render_powerbi_fullscreen(relatorio):
     st.subheader(f"📺 Visualizando: {relatorio['titulo']}")
-    st.caption("Visualizacao interna para teste no portal.")
+    st.caption("Visualizacao interna em modo foco para melhor desempenho.")
 
-    col_back, col_sidebar = st.columns([1, 1])
+    col_back, col_info = st.columns([1, 1])
     with col_back:
         if st.button("↩ Voltar ao dashboard", type="secondary", use_container_width=True):
             if "relatorio_em_tela" in st.session_state:
                 del st.session_state["relatorio_em_tela"]
+            if "ocultar_sidebar_prev" in st.session_state:
+                st.session_state["ocultar_sidebar"] = st.session_state["ocultar_sidebar_prev"]
+                del st.session_state["ocultar_sidebar_prev"]
             st.rerun()
-    with col_sidebar:
-        label_sidebar = "Mostrar menu" if st.session_state.get("ocultar_sidebar", False) else "Ocultar menu"
-        if st.button(label_sidebar, type="secondary", use_container_width=True):
-            st.session_state["ocultar_sidebar"] = not st.session_state.get("ocultar_sidebar", False)
-            st.rerun()
+    with col_info:
+        st.info("Menu oculto automaticamente durante a visualizacao.")
 
     link = relatorio["link_powerbi"]
     iframe_src = escape(link, quote=True)
@@ -452,6 +452,9 @@ if menu == MENU_DASHBOARD:
 
                 with col_btn:
                     if st.button("📊 Abrir no portal", key=f"open_{relatorio['id']}", use_container_width=True):
+                        if "ocultar_sidebar_prev" not in st.session_state:
+                            st.session_state["ocultar_sidebar_prev"] = st.session_state.get("ocultar_sidebar", False)
+                        st.session_state["ocultar_sidebar"] = True
                         st.session_state["relatorio_em_tela"] = relatorio["id"]
                         st.rerun()
 
