@@ -145,6 +145,19 @@ def apply_professional_theme():
     )
 
 
+def apply_sidebar_visibility():
+    if st.session_state.get("ocultar_sidebar", False):
+        st.markdown(
+            """
+            <style>
+                [data-testid="stSidebar"] { display: none !important; }
+                [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
 def render_page_header(title_text: str):
     if os.path.exists("logo_janelas_1.png"):
         logo_path = "logo_janelas_1.png"
@@ -267,14 +280,17 @@ def render_powerbi_fullscreen(relatorio):
     st.subheader(f"📺 Visualizando: {relatorio['titulo']}")
     st.caption("Visualizacao interna para teste no portal.")
 
-    col_back, col_open = st.columns([1, 1])
+    col_back, col_sidebar = st.columns([1, 1])
     with col_back:
         if st.button("↩ Voltar ao dashboard", type="secondary", use_container_width=True):
             if "relatorio_em_tela" in st.session_state:
                 del st.session_state["relatorio_em_tela"]
             st.rerun()
-    with col_open:
-        st.link_button("🌐 Abrir em nova aba", relatorio["link_powerbi"], use_container_width=True)
+    with col_sidebar:
+        label_sidebar = "Mostrar menu" if st.session_state.get("ocultar_sidebar", False) else "Ocultar menu"
+        if st.button(label_sidebar, type="secondary", use_container_width=True):
+            st.session_state["ocultar_sidebar"] = not st.session_state.get("ocultar_sidebar", False)
+            st.rerun()
 
     link = relatorio["link_powerbi"]
     if "embed" not in link.lower():
@@ -300,6 +316,9 @@ def render_powerbi_fullscreen(relatorio):
 
 init_db()
 apply_professional_theme()
+if "ocultar_sidebar" not in st.session_state:
+    st.session_state["ocultar_sidebar"] = False
+apply_sidebar_visibility()
 
 if "usuario" not in st.session_state:
     st.session_state.usuario = None
