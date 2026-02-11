@@ -139,7 +139,7 @@ def apply_professional_theme():
 
 def render_page_header(title_text: str):
     logo_path = "logo_janelas.png" if os.path.exists("logo_janelas.png") else "logo.png"
-    render_logo_centered(logo_path, 360, top_margin=22)
+    render_logo_centered(logo_path, 460, top_margin=42)
     st.markdown(f'<h1 class="portal-title">{title_text}</h1>', unsafe_allow_html=True)
 
 
@@ -260,7 +260,7 @@ if "usuario" not in st.session_state:
 
 if not st.session_state.usuario:
     logo_path = "logo_janelas.png" if os.path.exists("logo_janelas.png") else "logo.png"
-    render_logo_centered(logo_path, 340, top_margin=28)
+    render_logo_centered(logo_path, 430, top_margin=52)
 
     st.markdown('<h1 class="portal-title">📈 Portal Power BI</h1>', unsafe_allow_html=True)
 
@@ -295,8 +295,8 @@ is_admin = usuario["is_admin"]
 
 with st.sidebar:
     sidebar_logo = "logo_sidebar.png" if os.path.exists("logo_sidebar.png") else "logo.png"
-    st.markdown('<h2 class="sidebar-brand">Grupo FRT</h2>', unsafe_allow_html=True)
     render_logo(0, sidebar_logo, use_container_width=True)
+    st.markdown('<h2 class="sidebar-brand">Grupo FRT</h2>', unsafe_allow_html=True)
     st.markdown('<p class="sidebar-subtitle">Portal Power BI</p>', unsafe_allow_html=True)
     st.markdown("---")
     st.markdown(f'<p class="sidebar-user">Usuario: {usuario["username"]}</p>', unsafe_allow_html=True)
