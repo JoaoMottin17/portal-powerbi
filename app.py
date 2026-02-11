@@ -50,8 +50,6 @@ def render_logo(width: int, path: str = "logo.png", use_container_width: bool = 
 def render_logo_janelas(width: int = 520):
     if os.path.exists("logo_janelas_1.png"):
         janelas_logo = "logo_janelas_1.png"
-    elif os.path.exists("logo_janelas.png"):
-        janelas_logo = "logo_janelas.png"
     else:
         janelas_logo = "logo.png"
     render_logo(width, janelas_logo)
@@ -148,8 +146,6 @@ def apply_professional_theme():
 def render_page_header(title_text: str):
     if os.path.exists("logo_janelas_1.png"):
         logo_path = "logo_janelas_1.png"
-    elif os.path.exists("logo_janelas.png"):
-        logo_path = "logo_janelas.png"
     else:
         logo_path = "logo.png"
     render_logo_centered(logo_path, 460, top_margin=42)
@@ -274,8 +270,6 @@ if "usuario" not in st.session_state:
 if not st.session_state.usuario:
     if os.path.exists("logo_janelas_1.png"):
         logo_path = "logo_janelas_1.png"
-    elif os.path.exists("logo_janelas.png"):
-        logo_path = "logo_janelas.png"
     else:
         logo_path = "logo.png"
     render_logo_centered(logo_path, 430, top_margin=52)
