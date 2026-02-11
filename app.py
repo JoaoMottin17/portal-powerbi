@@ -123,6 +123,7 @@ def apply_professional_theme():
 def render_page_header(title_text: str):
     col_l, col_c, col_r = st.columns([1, 5, 1])
     with col_c:
+        st.markdown("<div style='height: 22px;'></div>", unsafe_allow_html=True)
         render_logo_janelas(360)
     st.markdown(f'<h1 class="portal-title">{title_text}</h1>', unsafe_allow_html=True)
 
@@ -243,6 +244,7 @@ if "usuario" not in st.session_state:
     st.session_state.usuario = None
 
 if not st.session_state.usuario:
+    st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
     col_logo_center_l, col_logo_center, col_logo_center_r = st.columns([1, 2, 1])
     with col_logo_center:
         render_logo_janelas(340)
