@@ -1,5 +1,6 @@
 import os
 import re
+import base64
 
 import streamlit as st
 from database import Database
@@ -49,6 +50,22 @@ def render_logo(width: int, path: str = "logo.png", use_container_width: bool = 
 def render_logo_janelas(width: int = 520):
     janelas_logo = "logo_janelas.png" if os.path.exists("logo_janelas.png") else "logo.png"
     render_logo(width, janelas_logo)
+
+
+def render_logo_centered(path: str, max_width: int, top_margin: int = 0):
+    if not os.path.exists(path):
+        return
+    with open(path, "rb") as img_file:
+        encoded = base64.b64encode(img_file.read()).decode("utf-8")
+    st.markdown(
+        f"""
+        <div style="display:flex;justify-content:center;margin-top:{top_margin}px;">
+            <img src="data:image/png;base64,{encoded}"
+                 style="width:min({max_width}px, 92%);height:auto;object-fit:contain;" />
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def apply_professional_theme():
@@ -121,10 +138,8 @@ def apply_professional_theme():
 
 
 def render_page_header(title_text: str):
-    col_l, col_c, col_r = st.columns([1, 5, 1])
-    with col_c:
-        st.markdown("<div style='height: 22px;'></div>", unsafe_allow_html=True)
-        render_logo_janelas(360)
+    logo_path = "logo_janelas.png" if os.path.exists("logo_janelas.png") else "logo.png"
+    render_logo_centered(logo_path, 360, top_margin=22)
     st.markdown(f'<h1 class="portal-title">{title_text}</h1>', unsafe_allow_html=True)
 
 
@@ -244,10 +259,8 @@ if "usuario" not in st.session_state:
     st.session_state.usuario = None
 
 if not st.session_state.usuario:
-    st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-    col_logo_center_l, col_logo_center, col_logo_center_r = st.columns([1, 2, 1])
-    with col_logo_center:
-        render_logo_janelas(340)
+    logo_path = "logo_janelas.png" if os.path.exists("logo_janelas.png") else "logo.png"
+    render_logo_centered(logo_path, 340, top_margin=28)
 
     st.markdown('<h1 class="portal-title">📈 Portal Power BI</h1>', unsafe_allow_html=True)
 
