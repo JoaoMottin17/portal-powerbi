@@ -293,9 +293,6 @@ def render_powerbi_fullscreen(relatorio):
             st.rerun()
 
     link = relatorio["link_powerbi"]
-    if "embed" not in link.lower():
-        st.warning("Para melhor resultado no iframe, use um link de embed do Power BI.")
-
     iframe_src = escape(link, quote=True)
     components.html(
         f"""
