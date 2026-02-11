@@ -199,17 +199,20 @@ is_admin = usuario["is_admin"]
 
 with st.sidebar:
     sidebar_logo = "logo_sidebar.png" if os.path.exists("logo_sidebar.png") else "logo.png"
-    render_logo(160, sidebar_logo, use_container_width=True)
-    st.markdown("---")
     st.markdown(
         """
         <div style="text-align:center;margin-bottom:20px;">
             <h2 style="color:#0E2C4D;">Grupo FRT</h2>
-            <p style="color:#666;font-size:14px;">Portal Power BI</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
+    render_logo(180, sidebar_logo, use_container_width=False)
+    st.markdown(
+        '<p style="text-align:center;color:#666;font-size:14px;">Portal Power BI</p>',
+        unsafe_allow_html=True,
+    )
+    st.markdown("---")
     st.markdown("---")
     st.write(f"Usuario: {usuario['username']}")
     if is_admin:
