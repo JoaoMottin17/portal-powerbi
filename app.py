@@ -356,6 +356,10 @@ with st.sidebar:
         st.info(f"Categorias: {', '.join(cats)}")
 
     st.markdown("---")
+    if "menu_destino" in st.session_state:
+        st.session_state["menu_atual"] = st.session_state["menu_destino"]
+        del st.session_state["menu_destino"]
+
     if "menu_atual" not in st.session_state:
         st.session_state["menu_atual"] = MENU_DASHBOARD
     if "editar_relatorio" in st.session_state:
@@ -441,7 +445,7 @@ if menu == MENU_DASHBOARD:
                     with c2:
                         if st.button("✏️ Editar", key=f"edit_{relatorio['id']}"):
                             st.session_state["editar_relatorio"] = relatorio["id"]
-                            st.session_state["menu_atual"] = MENU_NOVO_RELATORIO
+                            st.session_state["menu_destino"] = MENU_NOVO_RELATORIO
                             st.rerun()
                     with c3:
                         if st.button("🗑️ Excluir", key=f"del_{relatorio['id']}"):
@@ -483,12 +487,12 @@ elif menu == MENU_NOVO_RELATORIO:
                         if atualizar_relatorio(relatorio["id"], titulo, link, descricao, categoria):
                             st.success("Relatorio atualizado com sucesso.")
                             del st.session_state["editar_relatorio"]
-                            st.session_state["menu_atual"] = MENU_DASHBOARD
+                            st.session_state["menu_destino"] = MENU_DASHBOARD
                             st.rerun()
             with col_cancelar:
                 if st.form_submit_button("❌ Cancelar", type="secondary", use_container_width=True):
                     del st.session_state["editar_relatorio"]
-                    st.session_state["menu_atual"] = MENU_DASHBOARD
+                    st.session_state["menu_destino"] = MENU_DASHBOARD
                     st.rerun()
         else:
             if st.form_submit_button("💾 Salvar relatorio", type="primary", use_container_width=True):
@@ -499,7 +503,7 @@ elif menu == MENU_NOVO_RELATORIO:
                 else:
                     if criar_relatorio(titulo, link, descricao, categoria, usuario["id"]):
                         st.success("Relatorio adicionado com sucesso.")
-                        st.session_state["menu_atual"] = MENU_DASHBOARD
+                        st.session_state["menu_destino"] = MENU_DASHBOARD
                         st.rerun()
 
 elif menu == MENU_GERENCIAR_USUARIOS:
