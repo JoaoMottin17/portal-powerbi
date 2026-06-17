@@ -2,10 +2,30 @@ import os
 import re
 import base64
 from html import escape
+from datetime import datetime, timedelta, timezone
 
 import streamlit as st
 import streamlit.components.v1 as components
 from database import Database
+
+
+# Fuso de Brasilia (UTC-3, sem horario de verao desde 2019).
+_TZ_BR = timezone(timedelta(hours=-3))
+
+
+def fmt_data(valor):
+    """Formata datas do Supabase (ISO/UTC) em dd/mm/aaaa hh:mm (horario de Brasilia)."""
+    if not valor:
+        return "—"
+    try:
+        dt = valor
+        if isinstance(valor, str):
+            dt = datetime.fromisoformat(valor.replace("Z", "+00:00"))
+        if getattr(dt, "tzinfo", None) is not None:
+            dt = dt.astimezone(_TZ_BR)
+        return dt.strftime("%d/%m/%Y %H:%M")
+    except Exception:  # noqa: BLE001  (formato inesperado: mostra o cru)
+        return str(valor)[:16].replace("T", " ")
 
 
 st.set_page_config(
@@ -525,9 +545,9 @@ if menu == MENU_DASHBOARD:
                 with col_info:
                     st.write(f"Descricao: {relatorio['descricao'] or 'Sem descricao'}")
                     st.write(f"Criado por: {relatorio['criador'] or 'Sistema'}")
-                    st.write(f"Criado em: {relatorio['criado_em']}")
+                    st.write(f"Criado em: {fmt_data(relatorio['criado_em'])}")
                     if relatorio["atualizado_em"] and relatorio["atualizado_em"] != relatorio["criado_em"]:
-                        st.write(f"Atualizado em: {relatorio['atualizado_em']}")
+                        st.write(f"Atualizado em: {fmt_data(relatorio['atualizado_em'])}")
 
                 with col_btn:
                     if st.button("📊 Abrir no portal", key=f"open_{relatorio['id']}", use_container_width=True):
@@ -719,7 +739,7 @@ elif menu == MENU_GERENCIAR_USUARIOS:
                             st.write(f"Categorias: {', '.join(user['categorias_permitidas'][:5])}")
                             if len(user["categorias_permitidas"]) > 5:
                                 st.write(f"... e mais {len(user['categorias_permitidas']) - 5}")
-                        st.write(f"Criado em: {user['criado_em']}")
+                        st.write(f"Criado em: {fmt_data(user['criado_em'])}")
                     with c2:
                         if st.button("✏️ Editar", key=f"edit_{user['id']}", type="secondary"):
                             st.session_state["editar_usuario_id"] = user["id"]
