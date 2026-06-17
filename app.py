@@ -297,6 +297,10 @@ def render_powerbi_fullscreen(relatorio):
         st.info("Menu oculto automaticamente durante a visualizacao.")
 
     link = relatorio["link_powerbi"]
+    # Apps Streamlit so embedam corretamente em iframe com ?embed=true
+    # (sem isso o navegador bloqueia). Acrescenta automaticamente se faltar.
+    if "streamlit.app" in link.lower() and "embed=" not in link.lower():
+        link = link + ("&" if "?" in link else "?") + "embed=true"
     iframe_src = escape(link, quote=True)
     components.html(
         f"""
