@@ -47,10 +47,10 @@ CATEGORIAS_PADRAO = [
     "Operacional",
 ]
 
-MENU_DASHBOARD = "📊 Dashboard"
-MENU_NOVO_RELATORIO = "➕ Novo Relatorio"
-MENU_GERENCIAR_USUARIOS = "👥 Gerenciar Usuarios"
-MENU_MINHA_CONTA = "⚙️ Minha Conta"
+MENU_DASHBOARD = "Dashboard"
+MENU_NOVO_RELATORIO = "Novo relatorio"
+MENU_GERENCIAR_USUARIOS = "Usuarios"
+MENU_MINHA_CONTA = "Minha conta"
 
 
 @st.cache_resource
@@ -99,6 +99,12 @@ def apply_professional_theme():
         <style>
             /* ---- Tipografia profissional (Poppins nos titulos + Inter no corpo) ---- */
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
+            .material-symbols-outlined {
+                font-family: 'Material Symbols Outlined';
+                font-weight: normal; font-style: normal; line-height: 1;
+                vertical-align: middle; -webkit-font-feature-settings: 'liga';
+            }
 
             :root {
                 --frt-escuro: #14401E;   /* verde escuro da logo */
@@ -171,6 +177,22 @@ def apply_professional_theme():
             .stButton > button[kind="secondary"] { border: 1px solid var(--frt-borda); }
             .stButton > button[kind="secondary"]:hover {
                 border-color: var(--frt-medio); color: var(--frt-escuro);
+            }
+
+            /* Navegacao da sidebar: itens alinhados a esquerda, estilo menu */
+            [data-testid="stSidebar"] .stButton > button {
+                justify-content: flex-start;
+                padding-left: 0.9rem;
+                font-weight: 600;
+            }
+            [data-testid="stSidebar"] .stButton > button[kind="secondary"] {
+                border-color: transparent;
+                background: transparent;
+                color: var(--frt-texto);
+            }
+            [data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover {
+                background: #F0F5EE;
+                border-color: transparent;
             }
 
             /* ---- Cards / expanders (lista de relatorios) ---- */
@@ -376,7 +398,8 @@ def render_powerbi_fullscreen(relatorio):
         """,
         unsafe_allow_html=True,
     )
-    if st.button(f"↩ Voltar  ·  {relatorio['titulo']}", type="secondary"):
+    if st.button(f"Voltar  ·  {relatorio['titulo']}", icon=":material/arrow_back:",
+                 type="secondary"):
         if "relatorio_em_tela" in st.session_state:
             del st.session_state["relatorio_em_tela"]
         if "ocultar_sidebar_prev" in st.session_state:
@@ -431,16 +454,17 @@ if not st.session_state.usuario:
         logo_path = "logo.png"
     render_logo_centered(logo_path, 430, top_margin=52)
 
-    st.markdown('<h1 class="portal-title">📈 Portal Power BI</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="portal-title">Portal Power BI</h1>', unsafe_allow_html=True)
 
     st.markdown("---")
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         with st.form("login_form", border=False):
-            st.subheader("🔐 Acesso ao sistema")
+            st.subheader(":material/lock: Acesso ao sistema")
             username = st.text_input("Usuario", placeholder="Digite seu usuario")
             senha = st.text_input("Senha", type="password", placeholder="Digite sua senha")
-            if st.form_submit_button("🚀 Entrar", use_container_width=True, type="primary"):
+            if st.form_submit_button("Entrar", icon=":material/login:",
+                                     use_container_width=True, type="primary"):
                 if username and senha:
                     usuario = verificar_login(username, senha)
                     if usuario:
@@ -468,12 +492,21 @@ with st.sidebar:
     st.markdown('<h2 class="sidebar-brand">Grupo FRT</h2>', unsafe_allow_html=True)
     st.markdown('<p class="sidebar-subtitle">Portal Power BI</p>', unsafe_allow_html=True)
     st.markdown("---")
-    st.markdown(f'<p class="sidebar-user">Usuario: {usuario["username"]}</p>', unsafe_allow_html=True)
-    if is_admin:
-        st.success("Administrador")
-    else:
-        cats = usuario["categorias_permitidas"]
-        st.info(f"Categorias: {', '.join(cats)}")
+    papel = "Administrador" if is_admin else "Usuário"
+    icone_papel = "shield_person" if is_admin else "person"
+    st.markdown(
+        "<div style='display:flex;align-items:center;gap:.6rem;padding:.55rem .7rem;"
+        "background:#F0F5EE;border:1px solid #E2E8E0;border-radius:12px'>"
+        f"<span class='material-symbols-outlined' style='font-size:30px;color:#2E7D32'>{icone_papel}</span>"
+        "<div style='line-height:1.15'>"
+        f"<div style='font-weight:700;color:#1D2A22;font-size:.95rem'>{escape(usuario['username'])}</div>"
+        f"<div style='color:#5B6B60;font-size:.74rem;font-weight:700;"
+        f"text-transform:uppercase;letter-spacing:.05em'>{papel}</div>"
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+    if not is_admin:
+        st.caption("Categorias: " + ", ".join(usuario["categorias_permitidas"]))
 
     st.markdown("---")
     if "menu_destino" in st.session_state:
@@ -485,14 +518,25 @@ with st.sidebar:
     if "editar_relatorio" in st.session_state:
         st.session_state["menu_atual"] = MENU_NOVO_RELATORIO
 
-    menu = st.radio(
-        "Menu principal",
-        [MENU_DASHBOARD, MENU_NOVO_RELATORIO, MENU_GERENCIAR_USUARIOS, MENU_MINHA_CONTA],
-        label_visibility="collapsed",
-        key="menu_atual",
-    )
+    _nav = [
+        (MENU_DASHBOARD, ":material/dashboard:", "Dashboard"),
+        (MENU_NOVO_RELATORIO, ":material/add_chart:", "Novo relatório"),
+    ]
+    if is_admin:
+        _nav.append((MENU_GERENCIAR_USUARIOS, ":material/group:", "Usuários"))
+    _nav.append((MENU_MINHA_CONTA, ":material/manage_accounts:", "Minha conta"))
+
+    for _valor, _icone, _rotulo in _nav:
+        _ativo = st.session_state["menu_atual"] == _valor
+        if st.button(_rotulo, icon=_icone, key=f"nav_{_valor}",
+                     use_container_width=True,
+                     type="primary" if _ativo else "secondary"):
+            st.session_state["menu_atual"] = _valor
+            st.rerun()
+    menu = st.session_state["menu_atual"]
+
     st.markdown("---")
-    if st.button("🚪 Sair", use_container_width=True, type="secondary"):
+    if st.button("Sair", icon=":material/logout:", use_container_width=True, type="secondary"):
         st.session_state.usuario = None
         st.rerun()
 
@@ -502,16 +546,16 @@ _em_tela = menu == MENU_DASHBOARD and st.session_state.get("relatorio_em_tela")
 if _em_tela:
     pass
 elif menu == MENU_DASHBOARD:
-    render_page_header("📊 Dashboard de Relatorios")
+    render_page_header("Dashboard de Relatórios")
 elif menu == MENU_NOVO_RELATORIO:
     if "editar_relatorio" in st.session_state:
-        render_page_header("✏️ Editar relatorio")
+        render_page_header("Editar relatório")
     else:
-        render_page_header("➕ Adicionar novo relatorio")
+        render_page_header("Adicionar novo relatório")
 elif menu == MENU_GERENCIAR_USUARIOS:
-    render_page_header("👥 Gerenciamento de usuarios")
+    render_page_header("Gerenciamento de usuários")
 else:
-    render_page_header("⚙️ Minha conta")
+    render_page_header("Minha conta")
 
 if not _em_tela:
     st.markdown("---")
@@ -577,12 +621,17 @@ if menu == MENU_DASHBOARD:
                             f"{escape(relatorio['titulo'])}</div>"
                             "<div style='color:#5B6B60;font-size:.85rem;line-height:1.35;"
                             f"min-height:40px;margin-bottom:.35rem'>{escape(desc_short)}</div>"
-                            "<div style='color:#93A096;font-size:.72rem;margin-bottom:.7rem'>"
-                            f"👤 {escape(relatorio['criador'] or 'Sistema')} &nbsp;·&nbsp; "
-                            f"🗓️ {fmt_data(relatorio['criado_em'])}</div>",
+                            "<div style='color:#93A096;font-size:.72rem;margin-bottom:.7rem;"
+                            "display:flex;align-items:center;gap:.3rem'>"
+                            "<span class='material-symbols-outlined' style='font-size:15px'>person</span>"
+                            f"{escape(relatorio['criador'] or 'Sistema')}"
+                            "<span style='margin:0 .25rem'>·</span>"
+                            "<span class='material-symbols-outlined' style='font-size:15px'>event</span>"
+                            f"{fmt_data(relatorio['criado_em'])}</div>",
                             unsafe_allow_html=True,
                         )
-                        if st.button("📊 Abrir", key=f"open_{relatorio['id']}",
+                        if st.button("Abrir", icon=":material/open_in_full:",
+                                     key=f"open_{relatorio['id']}",
                                      use_container_width=True, type="primary"):
                             if "ocultar_sidebar_prev" not in st.session_state:
                                 st.session_state["ocultar_sidebar_prev"] = st.session_state.get("ocultar_sidebar", False)
@@ -593,13 +642,15 @@ if menu == MENU_DASHBOARD:
                         if is_admin or relatorio["criado_por"] == usuario["id"]:
                             ce, cd = st.columns(2)
                             with ce:
-                                if st.button("✏️ Editar", key=f"edit_{relatorio['id']}",
+                                if st.button("Editar", icon=":material/edit:",
+                                             key=f"edit_{relatorio['id']}",
                                              use_container_width=True):
                                     st.session_state["editar_relatorio"] = relatorio["id"]
                                     st.session_state["menu_destino"] = MENU_NOVO_RELATORIO
                                     st.rerun()
                             with cd:
-                                if st.button("🗑️ Excluir", key=f"del_{relatorio['id']}",
+                                if st.button("Excluir", icon=":material/delete:",
+                                             key=f"del_{relatorio['id']}",
                                              use_container_width=True):
                                     if excluir_relatorio(relatorio["id"]):
                                         st.success("Relatorio excluido.")
@@ -630,7 +681,7 @@ elif menu == MENU_NOVO_RELATORIO:
         if modo_edicao:
             col_salvar, col_cancelar = st.columns(2)
             with col_salvar:
-                if st.form_submit_button("💾 Salvar alteracoes", type="primary", use_container_width=True):
+                if st.form_submit_button("Salvar alterações", icon=":material/save:", type="primary", use_container_width=True):
                     if not titulo or not link:
                         st.error("Preencha os campos obrigatorios.")
                     elif not validar_link_powerbi(link):
@@ -642,12 +693,12 @@ elif menu == MENU_NOVO_RELATORIO:
                             st.session_state["menu_destino"] = MENU_DASHBOARD
                             st.rerun()
             with col_cancelar:
-                if st.form_submit_button("❌ Cancelar", type="secondary", use_container_width=True):
+                if st.form_submit_button("Cancelar", icon=":material/close:", type="secondary", use_container_width=True):
                     del st.session_state["editar_relatorio"]
                     st.session_state["menu_destino"] = MENU_DASHBOARD
                     st.rerun()
         else:
-            if st.form_submit_button("💾 Salvar relatorio", type="primary", use_container_width=True):
+            if st.form_submit_button("Salvar relatório", icon=":material/save:", type="primary", use_container_width=True):
                 if not titulo or not link:
                     st.error("Preencha os campos obrigatorios.")
                 elif not validar_link_powerbi(link):
@@ -664,9 +715,9 @@ elif menu == MENU_GERENCIAR_USUARIOS:
         st.stop()
 
     if "editar_usuario_id" in st.session_state:
-        tab1, tab2 = st.tabs(["✏️ Editar usuario", "📋 Lista de usuarios"])
+        tab1, tab2 = st.tabs([":material/edit: Editar usuário", ":material/list: Lista de usuários"])
     else:
-        tab1, tab2 = st.tabs(["👤 Criar novo usuario", "📋 Lista de usuarios"])
+        tab1, tab2 = st.tabs([":material/person_add: Criar novo usuário", ":material/list: Lista de usuários"])
 
     with tab1:
         if "editar_usuario_id" in st.session_state:
@@ -775,12 +826,12 @@ elif menu == MENU_GERENCIAR_USUARIOS:
                                 st.write(f"... e mais {len(user['categorias_permitidas']) - 5}")
                         st.write(f"Criado em: {fmt_data(user['criado_em'])}")
                     with c2:
-                        if st.button("✏️ Editar", key=f"edit_{user['id']}", type="secondary"):
+                        if st.button("Editar", icon=":material/edit:", key=f"edit_{user['id']}", type="secondary"):
                             st.session_state["editar_usuario_id"] = user["id"]
                             st.rerun()
                     with c3:
                         if user["username"] != "admin":
-                            if st.button("🗑️ Excluir", key=f"delete_{user['id']}", type="secondary"):
+                            if st.button("Excluir", icon=":material/delete:", key=f"delete_{user['id']}", type="secondary"):
                                 if excluir_usuario(user["id"]):
                                     st.success(f"Usuario {user['username']} excluido.")
                                     st.rerun()
@@ -788,7 +839,7 @@ elif menu == MENU_GERENCIAR_USUARIOS:
 elif menu == MENU_MINHA_CONTA:
     col1, col2 = st.columns([1, 2])
     with col1:
-        st.subheader("👤 Perfil")
+        st.subheader(":material/person: Perfil")
         st.write(f"Usuario: {usuario['username']}")
         st.write(f"Tipo: {'Administrador' if is_admin else 'Usuario'}")
         if not is_admin:
@@ -797,12 +848,12 @@ elif menu == MENU_MINHA_CONTA:
                 st.write(f"- {cat}")
 
     with col2:
-        st.subheader("🔐 Alterar senha")
+        st.subheader(":material/password: Alterar senha")
         with st.form("alterar_senha_form"):
             senha_atual = st.text_input("Senha atual *", type="password")
             nova_senha = st.text_input("Nova senha *", type="password")
             confirmar_senha = st.text_input("Confirmar nova senha *", type="password")
-            if st.form_submit_button("🔄 Alterar senha", type="primary"):
+            if st.form_submit_button("Alterar senha", icon=":material/lock_reset:", type="primary"):
                 if not all([senha_atual, nova_senha, confirmar_senha]):
                     st.error("Preencha todos os campos.")
                 elif nova_senha != confirmar_senha:
