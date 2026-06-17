@@ -190,6 +190,17 @@ def apply_professional_theme():
             [data-testid="stExpander"] summary { font-weight: 600; color: var(--frt-escuro); }
             [data-testid="stExpander"] summary:hover { color: var(--frt-medio); }
 
+            /* Cards (grade de relatorios e listas) */
+            [data-testid="stVerticalBlockBorderWrapper"] {
+                border-radius: 14px !important;
+                box-shadow: 0 1px 3px rgba(20,64,30,.06);
+                transition: box-shadow .18s ease, transform .18s ease, border-color .18s ease;
+            }
+            [data-testid="stVerticalBlockBorderWrapper"]:hover {
+                box-shadow: 0 10px 24px rgba(20,64,30,.13);
+                transform: translateY(-2px);
+            }
+
             /* ---- Inputs com foco verde ---- */
             [data-baseweb="input"]:focus-within, [data-baseweb="select"]:focus-within,
             [data-baseweb="textarea"]:focus-within, .stTextArea textarea:focus {
@@ -538,38 +549,61 @@ if menu == MENU_DASHBOARD:
                 if termo in r["titulo"].lower() or (r["descricao"] and termo in r["descricao"].lower())
             ]
 
-        st.subheader(f"📋 Relatorios disponiveis ({len(relatorios_filtrados)})")
-        for relatorio in relatorios_filtrados:
-            with st.expander(f"{relatorio['titulo']} - {relatorio['categoria']}"):
-                col_info, col_btn = st.columns([3, 1])
-                with col_info:
-                    st.write(f"Descricao: {relatorio['descricao'] or 'Sem descricao'}")
-                    st.write(f"Criado por: {relatorio['criador'] or 'Sistema'}")
-                    st.write(f"Criado em: {fmt_data(relatorio['criado_em'])}")
-                    if relatorio["atualizado_em"] and relatorio["atualizado_em"] != relatorio["criado_em"]:
-                        st.write(f"Atualizado em: {fmt_data(relatorio['atualizado_em'])}")
+        st.markdown(
+            "<div style='font-family:Poppins,Inter,sans-serif;font-weight:600;"
+            "font-size:1.15rem;color:#14401E;margin:.2rem 0 .9rem'>"
+            f"Relatórios disponíveis <span style='color:#5B6B60;font-weight:500'>"
+            f"({len(relatorios_filtrados)})</span></div>",
+            unsafe_allow_html=True,
+        )
+        if not relatorios_filtrados:
+            st.info("Nenhum relatorio encontrado para o filtro/busca selecionados.")
 
-                with col_btn:
-                    if st.button("📊 Abrir no portal", key=f"open_{relatorio['id']}", use_container_width=True):
-                        if "ocultar_sidebar_prev" not in st.session_state:
-                            st.session_state["ocultar_sidebar_prev"] = st.session_state.get("ocultar_sidebar", False)
-                        st.session_state["ocultar_sidebar"] = True
-                        st.session_state["relatorio_em_tela"] = relatorio["id"]
-                        st.rerun()
-
-                st.markdown("---")
-                c2, c3 = st.columns(2)
-                if is_admin or relatorio["criado_por"] == usuario["id"]:
-                    with c2:
-                        if st.button("✏️ Editar", key=f"edit_{relatorio['id']}"):
-                            st.session_state["editar_relatorio"] = relatorio["id"]
-                            st.session_state["menu_destino"] = MENU_NOVO_RELATORIO
+        NCOLS = 3
+        for inicio in range(0, len(relatorios_filtrados), NCOLS):
+            linha = relatorios_filtrados[inicio:inicio + NCOLS]
+            for col, relatorio in zip(st.columns(NCOLS), linha):
+                with col:
+                    with st.container(border=True):
+                        desc = relatorio["descricao"] or "Sem descrição"
+                        desc_short = (desc[:110] + "…") if len(desc) > 110 else desc
+                        st.markdown(
+                            "<span style='display:inline-block;background:#E6F0E2;"
+                            "color:#14401E;font-size:.7rem;font-weight:700;letter-spacing:.04em;"
+                            "text-transform:uppercase;padding:3px 10px;border-radius:999px'>"
+                            f"{escape(relatorio['categoria'])}</span>"
+                            "<div style='font-family:Poppins,Inter,sans-serif;font-weight:700;"
+                            "font-size:1.02rem;color:#14401E;margin:.45rem 0 .2rem;line-height:1.25'>"
+                            f"{escape(relatorio['titulo'])}</div>"
+                            "<div style='color:#5B6B60;font-size:.85rem;line-height:1.35;"
+                            f"min-height:40px;margin-bottom:.35rem'>{escape(desc_short)}</div>"
+                            "<div style='color:#93A096;font-size:.72rem;margin-bottom:.7rem'>"
+                            f"👤 {escape(relatorio['criador'] or 'Sistema')} &nbsp;·&nbsp; "
+                            f"🗓️ {fmt_data(relatorio['criado_em'])}</div>",
+                            unsafe_allow_html=True,
+                        )
+                        if st.button("📊 Abrir", key=f"open_{relatorio['id']}",
+                                     use_container_width=True, type="primary"):
+                            if "ocultar_sidebar_prev" not in st.session_state:
+                                st.session_state["ocultar_sidebar_prev"] = st.session_state.get("ocultar_sidebar", False)
+                            st.session_state["ocultar_sidebar"] = True
+                            st.session_state["relatorio_em_tela"] = relatorio["id"]
                             st.rerun()
-                    with c3:
-                        if st.button("🗑️ Excluir", key=f"del_{relatorio['id']}"):
-                            if excluir_relatorio(relatorio["id"]):
-                                st.success("Relatorio excluido.")
-                                st.rerun()
+
+                        if is_admin or relatorio["criado_por"] == usuario["id"]:
+                            ce, cd = st.columns(2)
+                            with ce:
+                                if st.button("✏️ Editar", key=f"edit_{relatorio['id']}",
+                                             use_container_width=True):
+                                    st.session_state["editar_relatorio"] = relatorio["id"]
+                                    st.session_state["menu_destino"] = MENU_NOVO_RELATORIO
+                                    st.rerun()
+                            with cd:
+                                if st.button("🗑️ Excluir", key=f"del_{relatorio['id']}",
+                                             use_container_width=True):
+                                    if excluir_relatorio(relatorio["id"]):
+                                        st.success("Relatorio excluido.")
+                                        st.rerun()
 
 elif menu == MENU_NOVO_RELATORIO:
     if "editar_relatorio" in st.session_state:
