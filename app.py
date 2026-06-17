@@ -273,6 +273,7 @@ def validar_link_powerbi(link):
         r"embed\?",
         r"streamlit\.app",
         r"streamlit\.io",
+        r"ts\.net",
     ]
     for padrao in padroes:
         if re.search(padrao, link, re.IGNORECASE):
