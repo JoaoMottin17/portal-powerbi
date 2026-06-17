@@ -77,62 +77,111 @@ def apply_professional_theme():
     st.markdown(
         """
         <style>
-            .stApp {
-                background: #f7f8fa;
+            /* ---- Tipografia profissional (Poppins nos titulos + Inter no corpo) ---- */
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap');
+
+            :root {
+                --frt-escuro: #14401E;   /* verde escuro da logo */
+                --frt-verde:  #2E7D32;
+                --frt-medio:  #43A047;   /* faixa media da logo */
+                --frt-claro:  #7CB342;   /* faixa clara da logo */
+                --frt-bg:     #F5F8F4;
+                --frt-card:   #FFFFFF;
+                --frt-borda:  #E2E8E0;
+                --frt-texto:  #1D2A22;
+                --frt-suave:  #5B6B60;
             }
-            .block-container {
-                padding-top: 1.2rem;
+
+            html, body, .stApp, [data-testid="stSidebar"],
+            input, textarea, button, select, [data-baseweb] {
+                font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
             }
-            [data-testid="stSidebar"] {
-                background: #eef1f5;
-            }
-            .portal-kicker {
-                margin: 0;
-                text-align: center;
-                color: #5f6b7a;
-                font-size: 0.95rem;
-                font-weight: 500;
-            }
-            .portal-title {
-                margin: 0.2rem 0 0.8rem 0;
-                color: #1d2733;
-                font-size: 2.6rem;
-                font-weight: 700;
-                letter-spacing: -0.02em;
-            }
-            .sidebar-brand {
-                margin: -0.35rem 0 0.05rem 0;
-                text-align: center;
-                color: #0f365f;
-                font-size: 2.2rem;
-                font-weight: 700;
+            h1, h2, h3, h4, .portal-title, .sidebar-brand {
+                font-family: 'Poppins', 'Inter', sans-serif !important;
+                color: var(--frt-escuro);
                 letter-spacing: -0.01em;
             }
+
+            /* ---- Fundo e barra superior ---- */
+            .stApp { background: var(--frt-bg); }
+            [data-testid="stHeader"] {
+                background: #FFFFFF;
+                border-bottom: 3px solid var(--frt-medio);
+            }
+            .block-container, [data-testid="stMainBlockContainer"] { padding-top: 1.4rem; }
+
+            /* ---- Sidebar ---- */
+            [data-testid="stSidebar"] {
+                background: #FFFFFF;
+                border-right: 1px solid var(--frt-borda);
+            }
+            [data-testid="stSidebar"] [data-testid="stImage"] { margin-bottom: 0 !important; }
+            .sidebar-brand {
+                margin: -0.35rem 0 0.05rem 0; text-align: center;
+                font-size: 2rem; font-weight: 700;
+            }
             .sidebar-subtitle {
-                margin: 0 0 0.1rem 0;
-                text-align: center;
-                color: #6b7280;
-                font-size: 0.95rem;
-                font-weight: 500;
+                margin: 0 0 0.1rem 0; text-align: center; color: var(--frt-suave);
+                font-size: 0.82rem; font-weight: 600; letter-spacing: 0.08em;
+                text-transform: uppercase;
             }
-            [data-testid="stSidebar"] [data-testid="stImage"] {
-                margin-bottom: 0 !important;
+            .sidebar-user { margin: 0; color: var(--frt-texto); font-size: 1rem; font-weight: 600; }
+
+            /* ---- Titulos do conteudo ---- */
+            .portal-kicker { margin: 0; text-align: center; color: var(--frt-suave);
+                font-size: 0.95rem; font-weight: 500; }
+            .portal-title {
+                margin: 0.2rem 0 0.8rem 0; text-align: center;
+                font-size: 2.4rem; font-weight: 700;
             }
-            .sidebar-user {
-                margin: 0;
-                color: #1f2937;
-                font-size: 1.02rem;
-                font-weight: 600;
+
+            /* ---- Botoes ---- */
+            .stButton > button {
+                border-radius: 10px; font-weight: 600; transition: all .15s ease;
             }
             .stButton > button[kind="primary"] {
-                background: linear-gradient(90deg, #0f7b3a 0%, #2fa84f 100%);
-                border: none;
-                color: #ffffff;
-                font-weight: 700;
+                background: linear-gradient(90deg, var(--frt-escuro) 0%, var(--frt-medio) 100%);
+                border: none; color: #ffffff; font-weight: 700;
+                box-shadow: 0 2px 6px rgba(20,64,30,.25);
             }
             .stButton > button[kind="primary"]:hover {
-                filter: brightness(0.96);
+                filter: brightness(1.07); transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(20,64,30,.3);
             }
+            .stButton > button[kind="secondary"] { border: 1px solid var(--frt-borda); }
+            .stButton > button[kind="secondary"]:hover {
+                border-color: var(--frt-medio); color: var(--frt-escuro);
+            }
+
+            /* ---- Cards / expanders (lista de relatorios) ---- */
+            [data-testid="stExpander"] {
+                border: 1px solid var(--frt-borda) !important;
+                border-radius: 12px !important;
+                background: var(--frt-card);
+                box-shadow: 0 1px 3px rgba(20,64,30,.06);
+                transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease;
+                overflow: hidden;
+            }
+            [data-testid="stExpander"]:hover {
+                box-shadow: 0 6px 18px rgba(20,64,30,.12);
+                border-color: var(--frt-claro) !important;
+                transform: translateY(-1px);
+            }
+            [data-testid="stExpander"] summary { font-weight: 600; color: var(--frt-escuro); }
+            [data-testid="stExpander"] summary:hover { color: var(--frt-medio); }
+
+            /* ---- Inputs com foco verde ---- */
+            [data-baseweb="input"]:focus-within, [data-baseweb="select"]:focus-within,
+            [data-baseweb="textarea"]:focus-within, .stTextArea textarea:focus {
+                border-color: var(--frt-medio) !important;
+                box-shadow: 0 0 0 2px rgba(67,160,71,.18) !important;
+            }
+
+            /* ---- Detalhes ---- */
+            [data-baseweb="tag"] { background-color: var(--frt-medio) !important; }
+            hr { border-color: var(--frt-borda); }
+            .stAlert { border-radius: 10px; }
+
             [data-testid="stSidebar"] img,
             [data-testid="stMainBlockContainer"] img {
                 object-fit: contain !important;
