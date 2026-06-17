@@ -297,10 +297,21 @@ def render_powerbi_fullscreen(relatorio):
         st.info("Menu oculto automaticamente durante a visualizacao.")
 
     link = relatorio["link_powerbi"]
-    # Apps Streamlit so embedam corretamente em iframe com ?embed=true
-    # (sem isso o navegador bloqueia). Acrescenta automaticamente se faltar.
-    if "streamlit.app" in link.lower() and "embed=" not in link.lower():
-        link = link + ("&" if "?" in link else "?") + "embed=true"
+    low = link.lower()
+    # Painel Streamlit (cloud *.streamlit.app ou tunel *.ts.net) embeda via iframe.
+    # 1) Acrescenta ?embed=true (sem isso o navegador bloqueia o iframe).
+    # 2) Se houver DASH_TOKEN nos Secrets do Portal, injeta ?token=... para
+    #    liberar o painel exposto na internet. O token vem SO dos Secrets do
+    #    Portal — nunca fica salvo no banco (Supabase guarda a URL limpa).
+    if "streamlit.app" in low or "ts.net" in low:
+        if "embed=" not in low:
+            link = link + ("&" if "?" in link else "?") + "embed=true"
+        try:
+            tok = str(st.secrets["DASH_TOKEN"])
+        except Exception:  # noqa: BLE001  (sem token configurado)
+            tok = ""
+        if tok and "token=" not in link.lower():
+            link = link + "&token=" + tok
     iframe_src = escape(link, quote=True)
     components.html(
         f"""
