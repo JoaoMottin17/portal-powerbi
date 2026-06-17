@@ -282,20 +282,27 @@ def validar_link_powerbi(link):
 
 
 def render_powerbi_fullscreen(relatorio):
-    st.subheader(f"📺 Visualizando: {relatorio['titulo']}")
-    st.caption("Visualizacao interna em modo foco para melhor desempenho.")
-
-    col_back, col_info = st.columns([1, 1])
-    with col_back:
-        if st.button("↩ Voltar ao dashboard", type="secondary", use_container_width=True):
-            if "relatorio_em_tela" in st.session_state:
-                del st.session_state["relatorio_em_tela"]
-            if "ocultar_sidebar_prev" in st.session_state:
-                st.session_state["ocultar_sidebar"] = st.session_state["ocultar_sidebar_prev"]
-                del st.session_state["ocultar_sidebar_prev"]
-            st.rerun()
-    with col_info:
-        st.info("Menu oculto automaticamente durante a visualizacao.")
+    # Modo TELA CHEIA: remove margens e limite de largura do portal e estica o
+    # iframe para ocupar quase toda a altura da janela.
+    st.markdown(
+        """
+        <style>
+            [data-testid="stMainBlockContainer"], .block-container {
+                padding: 0.3rem 0.6rem 0 0.6rem !important;
+                max-width: 100% !important;
+            }
+            .stApp iframe { height: 95vh !important; min-height: 95vh !important; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button(f"↩ Voltar  ·  {relatorio['titulo']}", type="secondary"):
+        if "relatorio_em_tela" in st.session_state:
+            del st.session_state["relatorio_em_tela"]
+        if "ocultar_sidebar_prev" in st.session_state:
+            st.session_state["ocultar_sidebar"] = st.session_state["ocultar_sidebar_prev"]
+            del st.session_state["ocultar_sidebar_prev"]
+        st.rerun()
 
     link = relatorio["link_powerbi"]
     low = link.lower()
@@ -316,17 +323,14 @@ def render_powerbi_fullscreen(relatorio):
     iframe_src = escape(link, quote=True)
     components.html(
         f"""
-        <div style="width:100%;height:86vh;border:1px solid #d6d8db;border-radius:10px;overflow:hidden;background:#fff;">
-            <iframe
-                src="{iframe_src}"
-                width="100%"
-                height="100%"
-                style="border:0;"
-                allowfullscreen="true">
-            </iframe>
-        </div>
+        <style>html,body{{margin:0;padding:0;height:100%;overflow:hidden;}}</style>
+        <iframe
+            src="{iframe_src}"
+            style="border:0;width:100%;height:100vh;display:block;"
+            allowfullscreen="true">
+        </iframe>
         """,
-        height=920,
+        height=900,
         scrolling=False,
     )
 
@@ -412,7 +416,12 @@ with st.sidebar:
         st.session_state.usuario = None
         st.rerun()
 
-if menu == MENU_DASHBOARD:
+# Em modo tela cheia (relatorio aberto) nao mostra cabecalho nem divisoria,
+# para o relatorio ocupar a tela inteira.
+_em_tela = menu == MENU_DASHBOARD and st.session_state.get("relatorio_em_tela")
+if _em_tela:
+    pass
+elif menu == MENU_DASHBOARD:
     render_page_header("📊 Dashboard de Relatorios")
 elif menu == MENU_NOVO_RELATORIO:
     if "editar_relatorio" in st.session_state:
@@ -424,7 +433,8 @@ elif menu == MENU_GERENCIAR_USUARIOS:
 else:
     render_page_header("⚙️ Minha conta")
 
-st.markdown("---")
+if not _em_tela:
+    st.markdown("---")
 
 
 if menu == MENU_DASHBOARD:
