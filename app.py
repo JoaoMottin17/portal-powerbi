@@ -264,11 +264,15 @@ def excluir_usuario(usuario_id):
 
 
 def validar_link_powerbi(link):
+    # Aceita relatorios do Power BI e tambem apps Streamlit (ex.: dashboards
+    # internos publicados em *.streamlit.app), ambos embedados via iframe.
     padroes = [
         r"app\.powerbi\.com",
         r"powerbi\.com",
         r"view\?r=",
         r"embed\?",
+        r"streamlit\.app",
+        r"streamlit\.io",
     ]
     for padrao in padroes:
         if re.search(padrao, link, re.IGNORECASE):
@@ -483,13 +487,13 @@ elif menu == MENU_NOVO_RELATORIO:
     with st.form("novo_relatorio_form", clear_on_submit=not modo_edicao):
         if modo_edicao:
             titulo = st.text_input("Titulo do relatorio *", value=relatorio["titulo"])
-            link = st.text_area("Link do Power BI *", value=relatorio["link_powerbi"], height=120)
+            link = st.text_area("Link do relatorio (Power BI ou Streamlit) *", value=relatorio["link_powerbi"], height=120)
             descricao = st.text_area("Descricao", value=relatorio["descricao"] or "", height=100)
             idx = CATEGORIAS_PADRAO.index(relatorio["categoria"]) if relatorio["categoria"] in CATEGORIAS_PADRAO else 0
             categoria = st.selectbox("Categoria", CATEGORIAS_PADRAO, index=idx)
         else:
             titulo = st.text_input("Titulo do relatorio *", placeholder="Ex: Dashboard de Vendas")
-            link = st.text_area("Link do Power BI *", height=120)
+            link = st.text_area("Link do relatorio (Power BI ou Streamlit) *", height=120)
             descricao = st.text_area("Descricao", height=100)
             categoria = st.selectbox("Categoria", CATEGORIAS_PADRAO)
 
@@ -501,7 +505,7 @@ elif menu == MENU_NOVO_RELATORIO:
                     if not titulo or not link:
                         st.error("Preencha os campos obrigatorios.")
                     elif not validar_link_powerbi(link):
-                        st.error("Link invalido. Use um link do Power BI.")
+                        st.error("Link invalido. Use um link do Power BI ou de um app Streamlit.")
                     else:
                         if atualizar_relatorio(relatorio["id"], titulo, link, descricao, categoria):
                             st.success("Relatorio atualizado com sucesso.")
@@ -518,7 +522,7 @@ elif menu == MENU_NOVO_RELATORIO:
                 if not titulo or not link:
                     st.error("Preencha os campos obrigatorios.")
                 elif not validar_link_powerbi(link):
-                    st.error("Link invalido. Use um link do Power BI.")
+                    st.error("Link invalido. Use um link do Power BI ou de um app Streamlit.")
                 else:
                     if criar_relatorio(titulo, link, descricao, categoria, usuario["id"]):
                         st.success("Relatorio adicionado com sucesso.")
