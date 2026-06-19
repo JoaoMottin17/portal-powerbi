@@ -136,40 +136,22 @@ def apply_professional_theme():
             }
             .block-container, [data-testid="stMainBlockContainer"] { padding-top: 1.4rem; }
 
-            /* ---- Sidebar (verde escuro, estilo app) ---- */
+            /* ---- Sidebar ---- */
             [data-testid="stSidebar"] {
-                background: linear-gradient(180deg, #14401E 0%, #0E2F16 100%);
-                border-right: none;
+                background: #FFFFFF;
+                border-right: 1px solid var(--frt-borda);
             }
-            /* logo num cartao branco */
-            [data-testid="stSidebar"] [data-testid="stImage"] {
-                background: #FFFFFF; border-radius: 14px; padding: 10px 12px;
-                margin-bottom: 0 !important;
-                box-shadow: 0 2px 8px rgba(0,0,0,.18);
-            }
+            [data-testid="stSidebar"] [data-testid="stImage"] { margin-bottom: 0 !important; }
             .sidebar-brand {
-                margin: .5rem 0 0.05rem 0; text-align: center;
-                font-size: 1.6rem; font-weight: 700; color: #FFFFFF !important;
+                margin: -0.35rem 0 0.05rem 0; text-align: center;
+                font-size: 2rem; font-weight: 700;
             }
             .sidebar-subtitle {
-                margin: 0 0 0.1rem 0; text-align: center; color: #9CC79C;
-                font-size: 0.8rem; font-weight: 600; letter-spacing: 0.08em;
+                margin: 0 0 0.1rem 0; text-align: center; color: var(--frt-suave);
+                font-size: 0.82rem; font-weight: 600; letter-spacing: 0.08em;
                 text-transform: uppercase;
             }
-            .sidebar-nav-label {
-                color: #7FB07F; font-size: .72rem; font-weight: 700;
-                letter-spacing: .12em; text-transform: uppercase;
-                margin: .1rem 0 .4rem .25rem;
-            }
-            .sidebar-footer {
-                color: #6E966E; font-size: .72rem; text-align: center; margin-top: .7rem;
-            }
-            /* textos auxiliares da sidebar em tom claro */
-            [data-testid="stSidebar"] hr { border-color: rgba(255,255,255,.12); }
-            [data-testid="stSidebar"] [data-testid="stCaptionContainer"],
-            [data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
-                color: #9CC79C !important;
-            }
+            .sidebar-user { margin: 0; color: var(--frt-texto); font-size: 1rem; font-weight: 600; }
 
             /* ---- Titulos do conteudo ---- */
             .portal-kicker { margin: 0; text-align: center; color: var(--frt-suave);
@@ -197,31 +179,20 @@ def apply_professional_theme():
                 border-color: var(--frt-medio); color: var(--frt-escuro);
             }
 
-            /* Navegacao da sidebar: itens estilo menu sobre fundo verde escuro */
+            /* Navegacao da sidebar: itens alinhados a esquerda, estilo menu */
             [data-testid="stSidebar"] .stButton > button {
                 justify-content: flex-start;
                 padding-left: 0.9rem;
                 font-weight: 600;
-                border-radius: 10px;
             }
             [data-testid="stSidebar"] .stButton > button[kind="secondary"] {
-                border: none;
+                border-color: transparent;
                 background: transparent;
-                color: #DCEBD6;
+                color: var(--frt-texto);
             }
             [data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover {
-                background: rgba(255,255,255,.08);
-                color: #FFFFFF;
-            }
-            [data-testid="stSidebar"] .stButton > button[kind="primary"] {
-                background: #2E7D32;
-                border: none;
-                border-left: 4px solid #7CB342;
-                color: #FFFFFF;
-                box-shadow: none;
-            }
-            [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
-                background: #357a38; filter: none; transform: none; box-shadow: none;
+                background: #F0F5EE;
+                border-color: transparent;
             }
 
             /* ---- Cards / expanders (lista de relatorios) ---- */
@@ -518,18 +489,18 @@ is_admin = usuario["is_admin"]
 with st.sidebar:
     sidebar_logo = "logo_sidebar.png" if os.path.exists("logo_sidebar.png") else "logo.png"
     render_logo(0, sidebar_logo, use_container_width=True)
-    st.markdown('<p class="sidebar-subtitle" style="margin-top:.55rem">Portal Power BI</p>',
-                unsafe_allow_html=True)
+    st.markdown('<h2 class="sidebar-brand">Grupo FRT</h2>', unsafe_allow_html=True)
+    st.markdown('<p class="sidebar-subtitle">Portal Power BI</p>', unsafe_allow_html=True)
     st.markdown("---")
     papel = "Administrador" if is_admin else "Usuário"
     icone_papel = "shield_person" if is_admin else "person"
     st.markdown(
         "<div style='display:flex;align-items:center;gap:.6rem;padding:.55rem .7rem;"
-        "background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:12px'>"
-        f"<span class='material-symbols-outlined' style='font-size:30px;color:#7CB342'>{icone_papel}</span>"
+        "background:#F0F5EE;border:1px solid #E2E8E0;border-radius:12px'>"
+        f"<span class='material-symbols-outlined' style='font-size:30px;color:#2E7D32'>{icone_papel}</span>"
         "<div style='line-height:1.15'>"
-        f"<div style='font-weight:700;color:#FFFFFF;font-size:.95rem'>{escape(usuario['username'])}</div>"
-        f"<div style='color:#9CC79C;font-size:.74rem;font-weight:700;"
+        f"<div style='font-weight:700;color:#1D2A22;font-size:.95rem'>{escape(usuario['username'])}</div>"
+        f"<div style='color:#5B6B60;font-size:.74rem;font-weight:700;"
         f"text-transform:uppercase;letter-spacing:.05em'>{papel}</div>"
         "</div></div>",
         unsafe_allow_html=True,
@@ -555,7 +526,6 @@ with st.sidebar:
         _nav.append((MENU_GERENCIAR_USUARIOS, ":material/group:", "Usuários"))
     _nav.append((MENU_MINHA_CONTA, ":material/manage_accounts:", "Minha conta"))
 
-    st.markdown('<p class="sidebar-nav-label">Navegação</p>', unsafe_allow_html=True)
     for _valor, _icone, _rotulo in _nav:
         _ativo = st.session_state["menu_atual"] == _valor
         if st.button(_rotulo, icon=_icone, key=f"nav_{_valor}",
@@ -569,8 +539,6 @@ with st.sidebar:
     if st.button("Sair", icon=":material/logout:", use_container_width=True, type="secondary"):
         st.session_state.usuario = None
         st.rerun()
-    st.markdown('<p class="sidebar-footer">v1.0 · Portal Power BI · Grupo FRT</p>',
-                unsafe_allow_html=True)
 
 # Em modo tela cheia (relatorio aberto) nao mostra cabecalho nem divisoria,
 # para o relatorio ocupar a tela inteira.
