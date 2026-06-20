@@ -1,6 +1,7 @@
 import os
 import re
 import base64
+import functools
 from html import escape
 from datetime import datetime, timedelta, timezone
 
@@ -28,11 +29,89 @@ def fmt_data(valor):
         return str(valor)[:16].replace("T", " ")
 
 
+def _icone_aba():
+    """Favicon padrao da aba (cabeca de boi verde), usado na carga inicial.
+    A troca dinamica conforme o tema do SISTEMA e feita por JavaScript em
+    _injetar_favicon_tema()."""
+    caminho = os.path.join(os.path.dirname(os.path.abspath(__file__)), "boi_escuro.png")
+    if os.path.exists(caminho):
+        try:
+            from PIL import Image
+            return Image.open(caminho)
+        except Exception:  # noqa: BLE001
+            return caminho
+    return ":bar_chart:"
+
+
+@functools.lru_cache(maxsize=None)
+def _favicon_data_uris():
+    """Le os PNGs do boi e devolve data URIs base64 (verde e branco)."""
+    base = os.path.dirname(os.path.abspath(__file__))
+    uris = {"verde": "", "branco": ""}
+    for chave, nome in (("verde", "boi_escuro.png"), ("branco", "boi_claro.png")):
+        caminho = os.path.join(base, nome)
+        try:
+            with open(caminho, "rb") as fh:
+                b64 = base64.b64encode(fh.read()).decode("ascii")
+            uris[chave] = "data:image/png;base64," + b64
+        except Exception:  # noqa: BLE001
+            uris[chave] = ""
+    return uris
+
+
+def _injetar_favicon_tema():
+    """Troca o favicon da aba conforme o tema do SISTEMA (prefers-color-scheme):
+    cabeca de boi VERDE no tema claro, BRANCA no tema escuro. Atualiza ao vivo,
+    sem depender do tema (fixo) do Streamlit."""
+    uris = _favicon_data_uris()
+    if not uris["verde"] and not uris["branco"]:
+        return
+    js = """
+    <script>
+    (function () {
+      try {
+        var doc = window.parent.document;
+        var VERDE = "__VERDE__";
+        var BRANCO = "__BRANCO__";
+        var mq = window.matchMedia("(prefers-color-scheme: dark)");
+        function aplicar() {
+          var href = (mq.matches ? BRANCO : VERDE) || VERDE || BRANCO;
+          if (!href) return;
+          var links = doc.querySelectorAll("link[rel~='icon']");
+          if (!links.length) {
+            var l = doc.createElement("link");
+            l.setAttribute("rel", "icon");
+            doc.head.appendChild(l);
+            links = [l];
+          }
+          links.forEach(function (link) {
+            if (link.getAttribute("href") !== href) {
+              link.setAttribute("type", "image/png");
+              link.setAttribute("href", href);
+            }
+          });
+        }
+        aplicar();
+        if (mq.addEventListener) { mq.addEventListener("change", aplicar); }
+        else if (mq.addListener) { mq.addListener(aplicar); }
+        new MutationObserver(aplicar).observe(doc.head, {
+          childList: true, subtree: true, attributes: true, attributeFilter: ["href"]
+        });
+      } catch (e) {}
+    })();
+    </script>
+    """
+    js = js.replace("__VERDE__", uris["verde"]).replace("__BRANCO__", uris["branco"])
+    components.html(js, height=0, width=0)
+
+
 st.set_page_config(
     page_title="Portal Power BI - Grupo FRT",
-    page_icon=":bar_chart:",
+    page_icon=_icone_aba(),
     layout="wide",
 )
+
+_injetar_favicon_tema()
 
 
 CATEGORIAS_PADRAO = [
