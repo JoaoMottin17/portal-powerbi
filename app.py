@@ -122,6 +122,10 @@ MENU_MINHA_CONTA = "Minha conta"
 
 @st.cache_resource
 def get_database() -> Database:
+    # Bump deste marcador quando o schema/contrato do Database mudar: altera o
+    # hash da funcao e forca o Streamlit a recriar o recurso (evita instancia
+    # antiga em cache apos um deploy).
+    _schema_version = "v3"
     return Database()
 
 
@@ -704,7 +708,8 @@ if menu == MENU_DASHBOARD:
                     with st.container(border=True):
                         desc = relatorio["descricao"] or "Sem descrição"
                         desc_short = (desc[:110] + "…") if len(desc) > 110 else desc
-                        _is_gestao = relatorio["nivel_hierarquia"] == "gestao"
+                        _nivel = relatorio.get("nivel_hierarquia", "operacao")
+                        _is_gestao = _nivel == "gestao"
                         _nivel_bg = "#14401E" if _is_gestao else "#EAF0EE"
                         _nivel_fg = "#FFFFFF" if _is_gestao else "#5B6B60"
                         st.markdown(
@@ -715,7 +720,7 @@ if menu == MENU_DASHBOARD:
                             f"<span style='display:inline-block;margin-left:.35rem;background:{_nivel_bg};"
                             f"color:{_nivel_fg};font-size:.7rem;font-weight:700;letter-spacing:.04em;"
                             "text-transform:uppercase;padding:3px 10px;border-radius:999px'>"
-                            f"{escape(NIVEL_LABELS[relatorio['nivel_hierarquia']])}</span>"
+                            f"{escape(NIVEL_LABELS.get(_nivel, 'Operação'))}</span>"
                             "<div style='font-family:Poppins,Inter,sans-serif;font-weight:700;"
                             "font-size:1.02rem;color:#14401E;margin:.45rem 0 .2rem;line-height:1.25;"
                             "height:2.5em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;"
@@ -999,7 +1004,7 @@ elif menu == MENU_GERENCIAR_USUARIOS:
                         st.write(f"Usuário: {user['username']}")
                         st.write(f"Tipo: {'Administrador' if user['is_admin'] else 'Usuário comum'}")
                         if not user["is_admin"]:
-                            st.write(f"Nível: {NIVEL_LABELS.get(user['nivel_hierarquia'], 'Operação')}")
+                            st.write(f"Nível: {NIVEL_LABELS.get(user.get('nivel_hierarquia'), 'Operação')}")
                             st.write(f"Áreas: {', '.join(user['categorias_permitidas'][:6])}"
                                      + (f" … (+{len(user['categorias_permitidas']) - 6})"
                                         if len(user["categorias_permitidas"]) > 6 else ""))
