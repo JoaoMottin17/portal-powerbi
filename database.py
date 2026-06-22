@@ -7,24 +7,60 @@ import psycopg
 from supabase import create_client
 
 
+# Areas de atuacao (filtro PRIMARIO de acesso por relatorio).
 CATEGORIAS_PADRAO = [
-    "Geral",
-    "Vendas",
-    "Marketing",
-    "Financeiro",
+    "GERAL",
+    "FINANCEIRO",
+    "SUPRIMENTOS",
+    "INSUMOS",
+    "MARKETING",
+    "OPERACIONAL",
+    "SOLINFITEC",
+    "LOGISTICA",
+    "VENDAS",
+    "DIRETORIA",
     "RH",
-    "Operacoes",
-    "Logistica",
-    "Suprimentos",
-    "Operacional",
+    "CONTROLADORIA",
 ]
+
+# Hierarquia de acesso. 'gestao' enxerga relatorios de gestao E de operacao;
+# 'operacao' enxerga apenas relatorios de operacao.
+NIVEIS_HIERARQUIA = ["gestao", "operacao"]
+NIVEL_LABELS = {"gestao": "Gestão", "operacao": "Operação"}
+NIVEL_PADRAO = "operacao"
+
+# Mapeamento de categorias antigas -> novas (migracao automatica de dados).
+_MAPA_CATEGORIAS_LEGADO = {
+    "Geral": "GERAL",
+    "Vendas": "VENDAS",
+    "Marketing": "MARKETING",
+    "Financeiro": "FINANCEIRO",
+    "RH": "RH",
+    "Operacoes": "OPERACIONAL",
+    "Operações": "OPERACIONAL",
+    "Logistica": "LOGISTICA",
+    "Logística": "LOGISTICA",
+    "Suprimentos": "SUPRIMENTOS",
+    "Operacional": "OPERACIONAL",
+}
+
+
+def normalizar_nivel(valor):
+    valor = (valor or "").strip().lower()
+    return valor if valor in NIVEIS_HIERARQUIA else NIVEL_PADRAO
 
 
 class Database:
+    _COLS_RELATORIO = (
+        "id,titulo,link_powerbi,descricao,categoria,nivel_hierarquia,"
+        "criado_por,criado_em,atualizado_em"
+    )
+
     def __init__(self):
         self.supabase = self._create_client()
         self.init_database()
 
+    # ----------------------------------------------------------------- infra
     def _get_secret(self, key: str, default: str = "") -> str:
         if key in st.secrets:
             return str(st.secrets[key])
@@ -41,7 +77,9 @@ class Database:
         db_url = self._get_secret("SUPABASE_DB_URL")
         if not db_url:
             raise RuntimeError(
-                "Schema ausente no Supabase e SUPABASE_DB_URL nao foi definido para criacao automatica."
+                "Schema/colunas ausentes no Supabase e SUPABASE_DB_URL nao foi "
+                "definido para criacao/migracao automatica. Rode supabase_schema.sql "
+                "ou migration_v3.sql no SQL Editor."
             )
 
         schema_sql = """
@@ -52,7 +90,9 @@ class Database:
             password_hash text not null,
             is_admin boolean not null default false,
             ativo boolean not null default true,
+            nivel_hierarquia text not null default 'operacao',
             categorias_permitidas jsonb not null default '[]'::jsonb,
+            relatorios_permitidos jsonb not null default '[]'::jsonb,
             criado_em timestamptz not null default now()
         );
 
@@ -61,7 +101,8 @@ class Database:
             titulo text not null,
             link_powerbi text not null,
             descricao text,
-            categoria text not null default 'Geral',
+            categoria text not null default 'GERAL',
+            nivel_hierarquia text not null default 'operacao',
             tags text,
             criado_por bigint references public.usuarios(id) on delete set null,
             ativo boolean not null default true,
@@ -76,7 +117,16 @@ class Database:
             data_acesso timestamptz not null default now()
         );
 
+        -- Migracao de bases existentes: adiciona colunas novas se faltarem.
+        alter table public.usuarios
+            add column if not exists nivel_hierarquia text not null default 'operacao';
+        alter table public.usuarios
+            add column if not exists relatorios_permitidos jsonb not null default '[]'::jsonb;
+        alter table public.relatorios
+            add column if not exists nivel_hierarquia text not null default 'operacao';
+
         create index if not exists idx_relatorios_categoria on public.relatorios(categoria);
+        create index if not exists idx_relatorios_nivel on public.relatorios(nivel_hierarquia);
         create index if not exists idx_relatorios_criado_por on public.relatorios(criado_por);
         create index if not exists idx_usuarios_username on public.usuarios(username);
 
@@ -104,6 +154,7 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute(schema_sql)
 
+    # ---------------------------------------------------------------- senhas
     def hash_password(self, password: str) -> str:
         return pbkdf2_sha256.hash(password)
 
@@ -111,14 +162,6 @@ class Database:
     def _legacy_hash_password(password: str) -> str:
         # Compatibilidade com hashes antigos (sha256 + salt fixo).
         return hashlib.sha256(f"{password}_salt_grupofrt".encode()).hexdigest()
-
-    @staticmethod
-    def _parse_categorias(value, is_admin=False):
-        if isinstance(value, list):
-            return value
-        if not value:
-            return CATEGORIAS_PADRAO if is_admin else []
-        return CATEGORIAS_PADRAO if is_admin else []
 
     def _verify_password(self, password: str, stored_hash: str):
         # Tenta verificar hash moderno (pbkdf2_sha256).
@@ -134,15 +177,77 @@ class Database:
 
         return False, False
 
+    # -------------------------------------------------------- normalizacao
+    @staticmethod
+    def _parse_categorias(value, is_admin=False):
+        if isinstance(value, list):
+            return value
+        return CATEGORIAS_PADRAO if is_admin else []
+
+    @staticmethod
+    def _parse_relatorios_permitidos(value):
+        if not isinstance(value, list):
+            return []
+        ids = []
+        for v in value:
+            try:
+                ids.append(int(v))
+            except (TypeError, ValueError):
+                continue
+        return ids
+
+    @staticmethod
+    def _hierarquia_ok(nivel_usuario, nivel_relatorio):
+        # gestao enxerga gestao + operacao; operacao so enxerga operacao.
+        if normalizar_nivel(nivel_usuario) == "gestao":
+            return True
+        return normalizar_nivel(nivel_relatorio) == "operacao"
+
+    def _pode_ver_relatorio(self, usuario, r):
+        """Regra de visibilidade de um relatorio (linha crua do banco) para um usuario.
+
+        Nao-admin enxerga se, ao mesmo tempo:
+          - a area (categoria) esta entre as suas areas permitidas (filtro primario);
+          - a hierarquia do relatorio e compativel com o nivel do usuario;
+          - e, se houver liberacao individual definida, o relatorio esta na lista
+            (filtro secundario restritivo).
+        O criador sempre acessa o proprio relatorio (para editar/visualizar).
+        """
+        if usuario.get("is_admin"):
+            return True
+        if r.get("criado_por") is not None and r.get("criado_por") == usuario.get("id"):
+            return True
+
+        areas = usuario.get("categorias_permitidas") or []
+        if (r.get("categoria") or "GERAL") not in areas:
+            return False
+        if not self._hierarquia_ok(usuario.get("nivel_hierarquia"), r.get("nivel_hierarquia")):
+            return False
+        permitidos = usuario.get("relatorios_permitidos") or []
+        if permitidos and r.get("id") not in permitidos:
+            return False
+        return True
+
+    # ------------------------------------------------------------ init/seed
+    def _smoke_test_schema(self):
+        # Falha se as colunas novas ainda nao existirem -> dispara a migracao.
+        self.supabase.table("usuarios").select(
+            "id,nivel_hierarquia,relatorios_permitidos"
+        ).limit(1).execute()
+        self.supabase.table("relatorios").select("id,nivel_hierarquia").limit(1).execute()
+
     def init_database(self):
         try:
-            self.supabase.table("usuarios").select("id").limit(1).execute()
-            self.supabase.table("relatorios").select("id").limit(1).execute()
+            self._smoke_test_schema()
         except Exception:
             self._create_schema_if_needed()
-            self.supabase.table("usuarios").select("id").limit(1).execute()
-            self.supabase.table("relatorios").select("id").limit(1).execute()
+            self._smoke_test_schema()
 
+        self._garantir_admin()
+        self._migrar_categorias_legado()
+        self._backfill_padroes()
+
+    def _garantir_admin(self):
         admin = (
             self.supabase.table("usuarios")
             .select("id")
@@ -161,25 +266,67 @@ class Database:
                     "username": "admin",
                     "password_hash": self.hash_password(initial_admin_password),
                     "is_admin": True,
+                    "nivel_hierarquia": "gestao",
                     "categorias_permitidas": CATEGORIAS_PADRAO,
+                    "relatorios_permitidos": [],
                 }
             ).execute()
 
-        users = self.supabase.table("usuarios").select("id,is_admin,categorias_permitidas").execute()
+    def _migrar_categorias_legado(self):
+        # Remapeia categorias antigas dos relatorios para as novas (maiusculas).
+        # Idempotente: apos a migracao nao ha mais valores legados.
+        for antigo, novo in _MAPA_CATEGORIAS_LEGADO.items():
+            if antigo == novo:
+                continue
+            achou = (
+                self.supabase.table("relatorios")
+                .select("id")
+                .eq("categoria", antigo)
+                .limit(1)
+                .execute()
+            )
+            if achou.data:
+                (
+                    self.supabase.table("relatorios")
+                    .update({"categoria": novo})
+                    .eq("categoria", antigo)
+                    .execute()
+                )
+
+    def _backfill_padroes(self):
+        users = (
+            self.supabase.table("usuarios")
+            .select("id,is_admin,categorias_permitidas")
+            .execute()
+        )
         for user in users.data or []:
-            if not user.get("categorias_permitidas"):
-                default_categorias = CATEGORIAS_PADRAO if user.get("is_admin") else ["Geral"]
+            cats = user.get("categorias_permitidas")
+            novas = None
+            if isinstance(cats, list) and cats:
+                # Remapeia categorias antigas e descarta as que nao existem mais,
+                # preservando a ordem padrao.
+                convertidas = {_MAPA_CATEGORIAS_LEGADO.get(c, c) for c in cats}
+                convertidas = [c for c in CATEGORIAS_PADRAO if c in convertidas]
+                if convertidas != cats:
+                    novas = convertidas or (["GERAL"] if not user.get("is_admin") else CATEGORIAS_PADRAO)
+            elif not cats:
+                novas = CATEGORIAS_PADRAO if user.get("is_admin") else ["GERAL"]
+            if novas is not None:
                 (
                     self.supabase.table("usuarios")
-                    .update({"categorias_permitidas": default_categorias})
+                    .update({"categorias_permitidas": novas})
                     .eq("id", user["id"])
                     .execute()
                 )
 
+    # ----------------------------------------------------------------- auth
     def autenticar_usuario(self, username: str, password: str):
         resp = (
             self.supabase.table("usuarios")
-            .select("id,username,password_hash,is_admin,categorias_permitidas")
+            .select(
+                "id,username,password_hash,is_admin,nivel_hierarquia,"
+                "categorias_permitidas,relatorios_permitidos"
+            )
             .eq("username", username)
             .limit(1)
             .execute()
@@ -200,52 +347,71 @@ class Database:
                 .execute()
             )
 
+        is_admin = bool(usuario.get("is_admin", False))
         return {
             "id": usuario["id"],
             "username": usuario["username"],
-            "is_admin": bool(usuario.get("is_admin", False)),
+            "is_admin": is_admin,
+            "nivel_hierarquia": normalizar_nivel(usuario.get("nivel_hierarquia")),
             "categorias_permitidas": self._parse_categorias(
-                usuario.get("categorias_permitidas"), bool(usuario.get("is_admin", False))
+                usuario.get("categorias_permitidas"), is_admin
+            ),
+            "relatorios_permitidos": self._parse_relatorios_permitidos(
+                usuario.get("relatorios_permitidos")
             ),
             "autenticado": True,
         }
 
+    # ------------------------------------------------------------ relatorios
     def _usuarios_map_por_id(self):
         resp = self.supabase.table("usuarios").select("id,username").execute()
         return {u["id"]: u["username"] for u in (resp.data or [])}
 
+    def _montar_relatorio(self, r, user_map):
+        return {
+            "id": r["id"],
+            "titulo": r["titulo"],
+            "link_powerbi": r["link_powerbi"],
+            "descricao": r.get("descricao"),
+            "categoria": r.get("categoria") or "GERAL",
+            "nivel_hierarquia": normalizar_nivel(r.get("nivel_hierarquia")),
+            "criado_por": r.get("criado_por"),
+            "criado_em": r.get("criado_em"),
+            "atualizado_em": r.get("atualizado_em") or r.get("criado_em"),
+            "criador": user_map.get(r.get("criado_por"), "Sistema"),
+        }
+
     def listar_relatorios_usuario(self, usuario):
         query = (
             self.supabase.table("relatorios")
-            .select("id,titulo,link_powerbi,descricao,categoria,criado_por,criado_em,atualizado_em")
+            .select(self._COLS_RELATORIO)
             .order("criado_em", desc=True)
         )
-        if not usuario["is_admin"] and usuario["categorias_permitidas"]:
-            query = query.in_("categoria", usuario["categorias_permitidas"])
+        if not usuario["is_admin"]:
+            areas = usuario.get("categorias_permitidas") or []
+            if not areas:
+                return []
+            query = query.in_("categoria", areas)
 
         resp = query.execute()
         user_map = self._usuarios_map_por_id()
+        permitidos = set(usuario.get("relatorios_permitidos") or [])
+        nivel_user = usuario.get("nivel_hierarquia")
+
         relatorios = []
         for r in resp.data or []:
-            relatorios.append(
-                {
-                    "id": r["id"],
-                    "titulo": r["titulo"],
-                    "link_powerbi": r["link_powerbi"],
-                    "descricao": r.get("descricao"),
-                    "categoria": r.get("categoria") or "Geral",
-                    "criado_por": r.get("criado_por"),
-                    "criado_em": r.get("criado_em"),
-                    "atualizado_em": r.get("atualizado_em") or r.get("criado_em"),
-                    "criador": user_map.get(r.get("criado_por"), "Sistema"),
-                }
-            )
+            if not usuario["is_admin"]:
+                if not self._hierarquia_ok(nivel_user, r.get("nivel_hierarquia")):
+                    continue
+                if permitidos and r["id"] not in permitidos:
+                    continue
+            relatorios.append(self._montar_relatorio(r, user_map))
         return relatorios
 
-    def obter_relatorio_por_id(self, relatorio_id: int):
+    def obter_relatorio_por_id(self, relatorio_id, usuario=None):
         resp = (
             self.supabase.table("relatorios")
-            .select("id,titulo,link_powerbi,descricao,categoria,criado_por,criado_em,atualizado_em")
+            .select(self._COLS_RELATORIO)
             .eq("id", relatorio_id)
             .limit(1)
             .execute()
@@ -253,32 +419,47 @@ class Database:
         if not resp.data:
             return None
         r = resp.data[0]
-        user_map = self._usuarios_map_por_id()
-        return {
-            "id": r["id"],
-            "titulo": r["titulo"],
-            "link_powerbi": r["link_powerbi"],
-            "descricao": r.get("descricao"),
-            "categoria": r.get("categoria") or "Geral",
-            "criado_por": r.get("criado_por"),
-            "criado_em": r.get("criado_em"),
-            "atualizado_em": r.get("atualizado_em") or r.get("criado_em"),
-            "criador": user_map.get(r.get("criado_por"), "Sistema"),
-        }
+        # Defesa em profundidade: so devolve se o usuario tiver permissao de ver.
+        if usuario is not None and not self._pode_ver_relatorio(usuario, r):
+            return None
+        return self._montar_relatorio(r, self._usuarios_map_por_id())
 
-    def criar_relatorio(self, titulo, link_powerbi, descricao, categoria, criado_por):
+    def listar_relatorios_basico(self):
+        # Lista enxuta (id/titulo/categoria/nivel) para o multiselect de
+        # liberacao individual na gestao de usuarios.
+        resp = (
+            self.supabase.table("relatorios")
+            .select("id,titulo,categoria,nivel_hierarquia")
+            .execute()
+        )
+        rows = [
+            {
+                "id": r["id"],
+                "titulo": r["titulo"],
+                "categoria": r.get("categoria") or "GERAL",
+                "nivel_hierarquia": normalizar_nivel(r.get("nivel_hierarquia")),
+            }
+            for r in (resp.data or [])
+        ]
+        rows.sort(key=lambda r: (r["categoria"], r["titulo"].lower()))
+        return rows
+
+    def criar_relatorio(self, titulo, link_powerbi, descricao, categoria, criado_por,
+                        nivel_hierarquia="operacao"):
         self.supabase.table("relatorios").insert(
             {
                 "titulo": titulo,
                 "link_powerbi": link_powerbi,
                 "descricao": descricao,
                 "categoria": categoria,
+                "nivel_hierarquia": normalizar_nivel(nivel_hierarquia),
                 "criado_por": criado_por,
             }
         ).execute()
         return True
 
-    def atualizar_relatorio(self, relatorio_id, titulo, link_powerbi, descricao, categoria):
+    def atualizar_relatorio(self, relatorio_id, titulo, link_powerbi, descricao, categoria,
+                           nivel_hierarquia="operacao"):
         (
             self.supabase.table("relatorios")
             .update(
@@ -287,6 +468,7 @@ class Database:
                     "link_powerbi": link_powerbi,
                     "descricao": descricao,
                     "categoria": categoria,
+                    "nivel_hierarquia": normalizar_nivel(nivel_hierarquia),
                 }
             )
             .eq("id", relatorio_id)
@@ -298,22 +480,31 @@ class Database:
         self.supabase.table("relatorios").delete().eq("id", relatorio_id).execute()
         return True
 
+    # -------------------------------------------------------------- usuarios
     def listar_usuarios(self):
         resp = (
             self.supabase.table("usuarios")
-            .select("id,username,is_admin,categorias_permitidas,criado_em")
+            .select(
+                "id,username,is_admin,nivel_hierarquia,"
+                "categorias_permitidas,relatorios_permitidos,criado_em"
+            )
             .order("criado_em", desc=True)
             .execute()
         )
         usuarios = []
         for u in resp.data or []:
+            is_admin = bool(u.get("is_admin", False))
             usuarios.append(
                 {
                     "id": u["id"],
                     "username": u["username"],
-                    "is_admin": bool(u.get("is_admin", False)),
+                    "is_admin": is_admin,
+                    "nivel_hierarquia": normalizar_nivel(u.get("nivel_hierarquia")),
                     "categorias_permitidas": self._parse_categorias(
-                        u.get("categorias_permitidas"), bool(u.get("is_admin", False))
+                        u.get("categorias_permitidas"), is_admin
+                    ),
+                    "relatorios_permitidos": self._parse_relatorios_permitidos(
+                        u.get("relatorios_permitidos")
                     ),
                     "criado_em": u.get("criado_em"),
                 }
@@ -323,7 +514,10 @@ class Database:
     def obter_usuario_por_id(self, usuario_id):
         resp = (
             self.supabase.table("usuarios")
-            .select("id,username,is_admin,categorias_permitidas")
+            .select(
+                "id,username,is_admin,nivel_hierarquia,"
+                "categorias_permitidas,relatorios_permitidos"
+            )
             .eq("id", usuario_id)
             .limit(1)
             .execute()
@@ -331,36 +525,69 @@ class Database:
         if not resp.data:
             return None
         u = resp.data[0]
+        is_admin = bool(u.get("is_admin", False))
         return {
             "id": u["id"],
             "username": u["username"],
-            "is_admin": bool(u.get("is_admin", False)),
+            "is_admin": is_admin,
+            "nivel_hierarquia": normalizar_nivel(u.get("nivel_hierarquia")),
             "categorias_permitidas": self._parse_categorias(
-                u.get("categorias_permitidas"), bool(u.get("is_admin", False))
+                u.get("categorias_permitidas"), is_admin
+            ),
+            "relatorios_permitidos": self._parse_relatorios_permitidos(
+                u.get("relatorios_permitidos")
             ),
         }
 
-    def criar_usuario_portal(self, username, senha, is_admin=False, categorias_permitidas=None):
-        if categorias_permitidas is None:
-            categorias_permitidas = CATEGORIAS_PADRAO if is_admin else ["Geral"]
+    def criar_usuario_portal(self, username, senha, is_admin=False, nivel_hierarquia="operacao",
+                            categorias_permitidas=None, relatorios_permitidos=None):
+        if is_admin:
+            # Admin enxerga tudo; os filtros sao normalizados.
+            nivel_hierarquia = "gestao"
+            categorias_permitidas = CATEGORIAS_PADRAO
+            relatorios_permitidos = []
+        else:
+            if categorias_permitidas is None:
+                categorias_permitidas = ["GERAL"]
+            relatorios_permitidos = self._parse_relatorios_permitidos(relatorios_permitidos or [])
+
         self.supabase.table("usuarios").insert(
             {
                 "username": username,
                 "password_hash": self.hash_password(senha),
                 "is_admin": bool(is_admin),
+                "nivel_hierarquia": normalizar_nivel(nivel_hierarquia),
                 "categorias_permitidas": categorias_permitidas,
+                "relatorios_permitidos": relatorios_permitidos,
             }
         ).execute()
         return True
 
-    def atualizar_usuario_portal(self, usuario_id, username=None, is_admin=None, categorias_permitidas=None):
+    def atualizar_usuario_portal(self, usuario_id, username=None, is_admin=None,
+                                nivel_hierarquia=None, categorias_permitidas=None,
+                                relatorios_permitidos=None):
         updates = {}
         if username:
             updates["username"] = username
-        if is_admin is not None:
-            updates["is_admin"] = bool(is_admin)
-        if categorias_permitidas is not None:
-            updates["categorias_permitidas"] = categorias_permitidas
+
+        if is_admin is True:
+            # Promovido a admin: enxerga tudo, zera filtros granulares.
+            updates["is_admin"] = True
+            updates["nivel_hierarquia"] = "gestao"
+            updates["categorias_permitidas"] = CATEGORIAS_PADRAO
+            updates["relatorios_permitidos"] = []
+        else:
+            if is_admin is False:
+                updates["is_admin"] = False
+            if nivel_hierarquia is not None:
+                updates["nivel_hierarquia"] = normalizar_nivel(nivel_hierarquia)
+            if categorias_permitidas is not None:
+                updates["categorias_permitidas"] = categorias_permitidas
+            if relatorios_permitidos is not None:
+                updates["relatorios_permitidos"] = self._parse_relatorios_permitidos(
+                    relatorios_permitidos
+                )
+
         if not updates:
             return True
         self.supabase.table("usuarios").update(updates).eq("id", usuario_id).execute()

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import streamlit as st
 import streamlit.components.v1 as components
-from database import Database
+from database import Database, CATEGORIAS_PADRAO, NIVEIS_HIERARQUIA, NIVEL_LABELS
 
 
 # Fuso de Brasilia (UTC-3, sem horario de verao desde 2019).
@@ -114,18 +114,6 @@ st.set_page_config(
 _injetar_favicon_tema()
 
 
-CATEGORIAS_PADRAO = [
-    "Geral",
-    "Vendas",
-    "Marketing",
-    "Financeiro",
-    "RH",
-    "Operacoes",
-    "Logistica",
-    "Suprimentos",
-    "Operacional",
-]
-
 MENU_DASHBOARD = "Dashboard"
 MENU_NOVO_RELATORIO = "Novo relatorio"
 MENU_GERENCIAR_USUARIOS = "Usuarios"
@@ -137,7 +125,15 @@ def get_database() -> Database:
     return Database()
 
 
-db = get_database()
+try:
+    db = get_database()
+except Exception as e:  # noqa: BLE001
+    st.error(
+        "Erro ao conectar/inicializar o Supabase. Confira os secrets "
+        "(SUPABASE_URL/SUPABASE_KEY) e o schema (supabase_schema.sql / migration_v3.sql)."
+    )
+    st.exception(e)
+    st.stop()
 
 
 def render_logo(width: int, path: str = "logo.png", use_container_width: bool = False):
@@ -348,18 +344,6 @@ def render_page_header(title_text: str):
     st.markdown(f'<h1 class="portal-title">{title_text}</h1>', unsafe_allow_html=True)
 
 
-def init_db():
-    try:
-        db.init_database()
-    except Exception as e:
-        st.error(
-            "Erro ao acessar tabelas no Supabase. "
-            "Crie a estrutura com o arquivo supabase_schema.sql."
-        )
-        st.exception(e)
-        st.stop()
-
-
 def verificar_login(username: str, senha: str):
     return db.autenticar_usuario(username, senha)
 
@@ -368,24 +352,46 @@ def listar_relatorios(usuario):
     return db.listar_relatorios_usuario(usuario)
 
 
-def obter_relatorio_por_id(relatorio_id: int):
-    return db.obter_relatorio_por_id(relatorio_id)
+def obter_relatorio_por_id(relatorio_id: int, usuario=None):
+    return db.obter_relatorio_por_id(relatorio_id, usuario)
 
 
-def criar_relatorio(titulo, link_powerbi, descricao, categoria, criado_por):
+def listar_relatorios_basico():
+    return db.listar_relatorios_basico()
+
+
+def criar_relatorio(titulo, link_powerbi, descricao, categoria, criado_por, nivel_hierarquia):
     try:
-        return db.criar_relatorio(titulo, link_powerbi, descricao, categoria, criado_por)
+        return db.criar_relatorio(
+            titulo, link_powerbi, descricao, categoria, criado_por, nivel_hierarquia
+        )
     except Exception as e:
         st.error(f"Erro ao criar relatorio: {e}")
         return False
 
 
-def atualizar_relatorio(relatorio_id, titulo, link_powerbi, descricao, categoria):
+def atualizar_relatorio(relatorio_id, titulo, link_powerbi, descricao, categoria, nivel_hierarquia):
     try:
-        return db.atualizar_relatorio(relatorio_id, titulo, link_powerbi, descricao, categoria)
+        return db.atualizar_relatorio(
+            relatorio_id, titulo, link_powerbi, descricao, categoria, nivel_hierarquia
+        )
     except Exception as e:
         st.error(f"Erro ao atualizar relatorio: {e}")
         return False
+
+
+def categorias_disponiveis_para(usuario):
+    """Areas que o usuario pode atribuir a um relatorio (admin = todas)."""
+    if usuario.get("is_admin"):
+        return list(CATEGORIAS_PADRAO)
+    return list(usuario.get("categorias_permitidas") or ["GERAL"])
+
+
+def niveis_disponiveis_para(usuario):
+    """Niveis hierarquicos que o usuario pode atribuir (operacao so cria operacao)."""
+    if usuario.get("is_admin") or usuario.get("nivel_hierarquia") == "gestao":
+        return list(NIVEIS_HIERARQUIA)
+    return ["operacao"]
 
 
 def excluir_relatorio(relatorio_id):
@@ -404,9 +410,13 @@ def obter_usuario_por_id(usuario_id):
     return db.obter_usuario_por_id(usuario_id)
 
 
-def criar_usuario(username, senha, is_admin=False, categorias_permitidas=None):
+def criar_usuario(username, senha, is_admin=False, nivel_hierarquia="operacao",
+                  categorias_permitidas=None, relatorios_permitidos=None):
     try:
-        return db.criar_usuario_portal(username, senha, is_admin, categorias_permitidas)
+        return db.criar_usuario_portal(
+            username, senha, is_admin, nivel_hierarquia,
+            categorias_permitidas, relatorios_permitidos,
+        )
     except Exception as e:
         msg = str(e).lower()
         if "duplicate" in msg or "unique" in msg:
@@ -416,9 +426,13 @@ def criar_usuario(username, senha, is_admin=False, categorias_permitidas=None):
         return False
 
 
-def atualizar_usuario(usuario_id, username=None, is_admin=None, categorias_permitidas=None):
+def atualizar_usuario(usuario_id, username=None, is_admin=None, nivel_hierarquia=None,
+                      categorias_permitidas=None, relatorios_permitidos=None):
     try:
-        return db.atualizar_usuario_portal(usuario_id, username, is_admin, categorias_permitidas)
+        return db.atualizar_usuario_portal(
+            usuario_id, username, is_admin, nivel_hierarquia,
+            categorias_permitidas, relatorios_permitidos,
+        )
     except Exception as e:
         msg = str(e).lower()
         if "duplicate" in msg or "unique" in msg:
@@ -517,7 +531,6 @@ def render_powerbi_fullscreen(relatorio):
     )
 
 
-init_db()
 apply_professional_theme()
 if "ocultar_sidebar" not in st.session_state:
     st.session_state["ocultar_sidebar"] = False
@@ -585,7 +598,8 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     if not is_admin:
-        st.caption("Categorias: " + ", ".join(usuario["categorias_permitidas"]))
+        st.caption("Nível: " + NIVEL_LABELS.get(usuario.get("nivel_hierarquia"), "Operação"))
+        st.caption("Áreas: " + ", ".join(usuario.get("categorias_permitidas") or []))
 
     st.markdown("---")
     if "menu_destino" in st.session_state:
@@ -643,9 +657,9 @@ if not _em_tela:
 if menu == MENU_DASHBOARD:
     relatorios = listar_relatorios(usuario)
     if st.session_state.get("relatorio_em_tela"):
-        relatorio_tela = obter_relatorio_por_id(st.session_state["relatorio_em_tela"])
+        relatorio_tela = obter_relatorio_por_id(st.session_state["relatorio_em_tela"], usuario)
         if relatorio_tela is None:
-            st.error("Relatorio selecionado nao foi encontrado.")
+            st.error("Relatorio nao encontrado ou voce nao tem permissao para acessa-lo.")
             del st.session_state["relatorio_em_tela"]
         else:
             render_powerbi_fullscreen(relatorio_tela)
@@ -690,11 +704,18 @@ if menu == MENU_DASHBOARD:
                     with st.container(border=True):
                         desc = relatorio["descricao"] or "Sem descrição"
                         desc_short = (desc[:110] + "…") if len(desc) > 110 else desc
+                        _is_gestao = relatorio["nivel_hierarquia"] == "gestao"
+                        _nivel_bg = "#14401E" if _is_gestao else "#EAF0EE"
+                        _nivel_fg = "#FFFFFF" if _is_gestao else "#5B6B60"
                         st.markdown(
                             "<span style='display:inline-block;background:#E6F0E2;"
                             "color:#14401E;font-size:.7rem;font-weight:700;letter-spacing:.04em;"
                             "text-transform:uppercase;padding:3px 10px;border-radius:999px'>"
                             f"{escape(relatorio['categoria'])}</span>"
+                            f"<span style='display:inline-block;margin-left:.35rem;background:{_nivel_bg};"
+                            f"color:{_nivel_fg};font-size:.7rem;font-weight:700;letter-spacing:.04em;"
+                            "text-transform:uppercase;padding:3px 10px;border-radius:999px'>"
+                            f"{escape(NIVEL_LABELS[relatorio['nivel_hierarquia']])}</span>"
                             "<div style='font-family:Poppins,Inter,sans-serif;font-weight:700;"
                             "font-size:1.02rem;color:#14401E;margin:.45rem 0 .2rem;line-height:1.25;"
                             "height:2.5em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;"
@@ -741,24 +762,53 @@ if menu == MENU_DASHBOARD:
 
 elif menu == MENU_NOVO_RELATORIO:
     if "editar_relatorio" in st.session_state:
-        relatorio = obter_relatorio_por_id(st.session_state["editar_relatorio"])
+        relatorio = obter_relatorio_por_id(st.session_state["editar_relatorio"], usuario)
         modo_edicao = relatorio is not None
+        if not modo_edicao:
+            st.error("Relatorio nao encontrado ou voce nao tem permissao para edita-lo.")
+            del st.session_state["editar_relatorio"]
+            st.stop()
     else:
         relatorio = None
         modo_edicao = False
 
+    opcoes_cat = categorias_disponiveis_para(usuario)
+    opcoes_nivel = niveis_disponiveis_para(usuario)
+    if modo_edicao:
+        if relatorio["categoria"] not in opcoes_cat:
+            opcoes_cat = [relatorio["categoria"]] + opcoes_cat
+        if relatorio["nivel_hierarquia"] not in opcoes_nivel:
+            opcoes_nivel = [relatorio["nivel_hierarquia"]] + opcoes_nivel
+
     with st.form("novo_relatorio_form", clear_on_submit=not modo_edicao):
         if modo_edicao:
             titulo = st.text_input("Titulo do relatorio *", value=relatorio["titulo"])
-            link = st.text_area("Link do relatorio (Power BI ou Streamlit) *", value=relatorio["link_powerbi"], height=120)
+            link = st.text_area("Link do relatorio (Power BI ou Streamlit) *",
+                                value=relatorio["link_powerbi"], height=120)
             descricao = st.text_area("Descricao", value=relatorio["descricao"] or "", height=100)
-            idx = CATEGORIAS_PADRAO.index(relatorio["categoria"]) if relatorio["categoria"] in CATEGORIAS_PADRAO else 0
-            categoria = st.selectbox("Categoria", CATEGORIAS_PADRAO, index=idx)
         else:
             titulo = st.text_input("Titulo do relatorio *", placeholder="Ex: Dashboard de Vendas")
             link = st.text_area("Link do relatorio (Power BI ou Streamlit) *", height=120)
             descricao = st.text_area("Descricao", height=100)
-            categoria = st.selectbox("Categoria", CATEGORIAS_PADRAO)
+
+        col_cat, col_niv = st.columns(2)
+        with col_cat:
+            idx_cat = opcoes_cat.index(relatorio["categoria"]) if (
+                modo_edicao and relatorio["categoria"] in opcoes_cat) else 0
+            categoria = st.selectbox("Área de atuação *", opcoes_cat, index=idx_cat)
+        with col_niv:
+            if modo_edicao and relatorio["nivel_hierarquia"] in opcoes_nivel:
+                idx_niv = opcoes_nivel.index(relatorio["nivel_hierarquia"])
+            elif "operacao" in opcoes_nivel:
+                idx_niv = opcoes_nivel.index("operacao")
+            else:
+                idx_niv = 0
+            nivel = st.selectbox("Hierarquia *", opcoes_nivel,
+                                 format_func=lambda n: NIVEL_LABELS[n], index=idx_niv)
+        st.caption(
+            "Hierarquia: relatórios de **Gestão** aparecem apenas para usuários de gestão; "
+            "os de **Operação** aparecem para todos os níveis (sempre respeitando a área)."
+        )
 
         st.markdown("---")
         if modo_edicao:
@@ -770,7 +820,7 @@ elif menu == MENU_NOVO_RELATORIO:
                     elif not validar_link_powerbi(link):
                         st.error("Link invalido. Use um link do Power BI ou de um app Streamlit.")
                     else:
-                        if atualizar_relatorio(relatorio["id"], titulo, link, descricao, categoria):
+                        if atualizar_relatorio(relatorio["id"], titulo, link, descricao, categoria, nivel):
                             st.success("Relatorio atualizado com sucesso.")
                             del st.session_state["editar_relatorio"]
                             st.session_state["menu_destino"] = MENU_DASHBOARD
@@ -787,7 +837,7 @@ elif menu == MENU_NOVO_RELATORIO:
                 elif not validar_link_powerbi(link):
                     st.error("Link invalido. Use um link do Power BI ou de um app Streamlit.")
                 else:
-                    if criar_relatorio(titulo, link, descricao, categoria, usuario["id"]):
+                    if criar_relatorio(titulo, link, descricao, categoria, usuario["id"], nivel):
                         st.success("Relatorio adicionado com sucesso.")
                         st.session_state["menu_destino"] = MENU_DASHBOARD
                         st.rerun()
@@ -805,14 +855,27 @@ elif menu == MENU_GERENCIAR_USUARIOS:
     with tab1:
         if "editar_usuario_id" in st.session_state:
             user_data = obter_usuario_por_id(st.session_state["editar_usuario_id"])
+            if user_data is None:
+                st.warning("Usuario nao encontrado (pode ter sido removido).")
+                del st.session_state["editar_usuario_id"]
+                st.rerun()
             modo_edicao = True
         else:
             user_data = None
             modo_edicao = False
 
+        # Opcoes de relatorios para a liberacao individual (filtro secundario).
+        rel_basico = listar_relatorios_basico()
+        rel_label = {
+            r["id"]: f"{r['categoria']} · {NIVEL_LABELS[r['nivel_hierarquia']]} · {r['titulo']}"
+            for r in rel_basico
+        }
+        rel_ids = [r["id"] for r in rel_basico]
+
         with st.form("criar_editar_usuario_form"):
+            st.markdown("##### Dados de acesso")
             if modo_edicao:
-                novo_username = st.text_input("Nome de usuario *", value=user_data["username"])
+                novo_username = st.text_input("Nome de usuário *", value=user_data["username"])
                 alterar_senha = st.checkbox("Alterar senha?")
                 if alterar_senha:
                     nova_senha = st.text_input("Nova senha *", type="password")
@@ -821,75 +884,107 @@ elif menu == MENU_GERENCIAR_USUARIOS:
                     nova_senha = ""
                     confirmar_senha = ""
             else:
-                novo_username = st.text_input("Nome de usuario *")
+                novo_username = st.text_input("Nome de usuário *")
                 nova_senha = st.text_input("Senha *", type="password")
                 confirmar_senha = st.text_input("Confirmar senha *", type="password")
 
-            user_is_admin = st.checkbox("E administrador?", value=user_data["is_admin"] if modo_edicao else False)
-            categorias_selecionadas = []
-            if not user_is_admin:
-                st.markdown("### Categorias permitidas")
-                if modo_edicao and user_data:
-                    categorias_selecionadas = list(user_data["categorias_permitidas"])
+            st.markdown("##### Perfil e hierarquia")
+            col_perfil, col_nivel = st.columns(2)
+            with col_perfil:
+                perfil = st.radio(
+                    "Perfil",
+                    ["Usuário comum", "Administrador"],
+                    index=1 if (modo_edicao and user_data["is_admin"]) else 0,
+                    help="Administrador enxerga todos os relatórios e gerencia usuários.",
+                )
+                user_is_admin = perfil == "Administrador"
+            with col_nivel:
+                nivel_atual = user_data["nivel_hierarquia"] if modo_edicao else "operacao"
+                nivel_idx = (
+                    NIVEIS_HIERARQUIA.index(nivel_atual)
+                    if nivel_atual in NIVEIS_HIERARQUIA
+                    else NIVEIS_HIERARQUIA.index("operacao")
+                )
+                nivel_sel = st.radio(
+                    "Nível hierárquico",
+                    NIVEIS_HIERARQUIA,
+                    index=nivel_idx,
+                    format_func=lambda n: NIVEL_LABELS[n],
+                    help="Gestão vê relatórios de gestão e de operação; Operação vê só os de operação.",
+                )
 
-                colunas = st.columns(3)
-                selecionadas = set(categorias_selecionadas)
-                for i, categoria in enumerate(CATEGORIAS_PADRAO):
-                    with colunas[i % 3]:
-                        if st.checkbox(categoria, value=categoria in selecionadas, key=f"cat_{categoria}"):
-                            selecionadas.add(categoria)
-                        else:
-                            selecionadas.discard(categoria)
-                categorias_selecionadas = sorted(list(selecionadas))
-                if not categorias_selecionadas:
-                    categorias_selecionadas = ["Geral"]
+            st.markdown("##### Filtro primário — áreas de atuação")
+            areas_default = list(user_data["categorias_permitidas"]) if modo_edicao else ["GERAL"]
+            areas_default = [a for a in areas_default if a in CATEGORIAS_PADRAO]
+            areas_sel = st.multiselect(
+                "Áreas que o usuário pode acessar",
+                CATEGORIAS_PADRAO,
+                default=areas_default,
+                help="O usuário só enxerga relatórios destas áreas (ignorado para administradores).",
+            )
+
+            st.markdown("##### Filtro secundário — liberação individual")
+            indiv_default = [
+                i for i in (user_data["relatorios_permitidos"] if modo_edicao else []) if i in rel_label
+            ]
+            indiv_sel = st.multiselect(
+                "Relatórios liberados individualmente",
+                rel_ids,
+                default=indiv_default,
+                format_func=lambda i: rel_label.get(i, f"#{i}"),
+                help=("Deixe VAZIO para liberar todos os relatórios das áreas. Se marcar relatórios, "
+                      "o usuário verá APENAS esses (sempre dentro das áreas e do nível permitidos)."),
+            )
+            if user_is_admin:
+                st.caption("Administrador enxerga tudo — nível, áreas e liberação individual são ignorados.")
 
             col_salvar, col_cancelar = st.columns(2)
             with col_salvar:
-                btn_text = "Salvar alteracoes" if modo_edicao else "Criar usuario"
-                if st.form_submit_button(btn_text, type="primary", use_container_width=True):
+                btn_text = "Salvar alterações" if modo_edicao else "Criar usuário"
+                if st.form_submit_button(btn_text, icon=":material/save:", type="primary", use_container_width=True):
+                    areas_final = areas_sel if areas_sel else ["GERAL"]
                     if modo_edicao:
-                        if alterar_senha and nova_senha and confirmar_senha:
+                        senha_ok = True
+                        if alterar_senha and (nova_senha or confirmar_senha):
                             if nova_senha != confirmar_senha:
                                 st.error("As senhas nao coincidem.")
+                                senha_ok = False
                             elif len(nova_senha) < 6:
                                 st.error("A senha deve ter pelo menos 6 caracteres.")
+                                senha_ok = False
                             else:
-                                if atualizar_senha(user_data["id"], nova_senha):
-                                    st.success("Senha atualizada.")
-
-                        ok = atualizar_usuario(
-                            user_data["id"],
-                            username=novo_username,
-                            is_admin=user_is_admin,
-                            categorias_permitidas=categorias_selecionadas if not user_is_admin else CATEGORIAS_PADRAO,
-                        )
-                        if ok:
-                            st.success("Usuario atualizado com sucesso.")
-                            if "editar_usuario_id" in st.session_state:
+                                atualizar_senha(user_data["id"], nova_senha)
+                        if senha_ok:
+                            ok = atualizar_usuario(
+                                user_data["id"],
+                                username=novo_username,
+                                is_admin=user_is_admin,
+                                nivel_hierarquia=nivel_sel,
+                                categorias_permitidas=areas_final,
+                                relatorios_permitidos=indiv_sel,
+                            )
+                            if ok:
+                                st.success("Usuario atualizado com sucesso.")
                                 del st.session_state["editar_usuario_id"]
-                            st.rerun()
+                                st.rerun()
                     else:
                         if not all([novo_username, nova_senha, confirmar_senha]):
-                            st.error("Preencha todos os campos.")
+                            st.error("Preencha usuário e senha.")
                         elif nova_senha != confirmar_senha:
                             st.error("As senhas nao coincidem.")
                         elif len(nova_senha) < 6:
                             st.error("A senha deve ter pelo menos 6 caracteres.")
                         else:
                             if criar_usuario(
-                                novo_username,
-                                nova_senha,
-                                user_is_admin,
-                                categorias_selecionadas if not user_is_admin else None,
+                                novo_username, nova_senha, user_is_admin,
+                                nivel_sel, areas_final, indiv_sel,
                             ):
                                 st.success(f"Usuario {novo_username} criado com sucesso.")
                                 st.rerun()
 
             with col_cancelar:
-                if modo_edicao and st.form_submit_button("Cancelar", type="secondary", use_container_width=True):
-                    if "editar_usuario_id" in st.session_state:
-                        del st.session_state["editar_usuario_id"]
+                if modo_edicao and st.form_submit_button("Cancelar", icon=":material/close:", type="secondary", use_container_width=True):
+                    del st.session_state["editar_usuario_id"]
                     st.rerun()
 
     with tab2:
@@ -901,12 +996,16 @@ elif menu == MENU_GERENCIAR_USUARIOS:
                 with st.container(border=True):
                     c1, c2, c3 = st.columns([3, 1, 1])
                     with c1:
-                        st.write(f"Usuario: {user['username']}")
-                        st.write(f"Tipo: {'Administrador' if user['is_admin'] else 'Usuario comum'}")
+                        st.write(f"Usuário: {user['username']}")
+                        st.write(f"Tipo: {'Administrador' if user['is_admin'] else 'Usuário comum'}")
                         if not user["is_admin"]:
-                            st.write(f"Categorias: {', '.join(user['categorias_permitidas'][:5])}")
-                            if len(user["categorias_permitidas"]) > 5:
-                                st.write(f"... e mais {len(user['categorias_permitidas']) - 5}")
+                            st.write(f"Nível: {NIVEL_LABELS.get(user['nivel_hierarquia'], 'Operação')}")
+                            st.write(f"Áreas: {', '.join(user['categorias_permitidas'][:6])}"
+                                     + (f" … (+{len(user['categorias_permitidas']) - 6})"
+                                        if len(user["categorias_permitidas"]) > 6 else ""))
+                            qtd_indiv = len(user.get("relatorios_permitidos") or [])
+                            if qtd_indiv:
+                                st.write(f"Liberação individual: {qtd_indiv} relatório(s) — vê apenas esses")
                         st.write(f"Criado em: {fmt_data(user['criado_em'])}")
                     with c2:
                         if st.button("Editar", icon=":material/edit:", key=f"edit_{user['id']}", type="secondary"):
@@ -923,12 +1022,16 @@ elif menu == MENU_MINHA_CONTA:
     col1, col2 = st.columns([1, 2])
     with col1:
         st.subheader(":material/person: Perfil")
-        st.write(f"Usuario: {usuario['username']}")
-        st.write(f"Tipo: {'Administrador' if is_admin else 'Usuario'}")
+        st.write(f"Usuário: {usuario['username']}")
+        st.write(f"Tipo: {'Administrador' if is_admin else 'Usuário'}")
         if not is_admin:
-            st.write("Categorias permitidas:")
+            st.write(f"Nível hierárquico: {NIVEL_LABELS.get(usuario.get('nivel_hierarquia'), 'Operação')}")
+            st.write("Áreas permitidas:")
             for cat in usuario["categorias_permitidas"]:
                 st.write(f"- {cat}")
+            qtd_indiv = len(usuario.get("relatorios_permitidos") or [])
+            if qtd_indiv:
+                st.caption(f"Acesso restrito a {qtd_indiv} relatório(s) liberado(s) individualmente.")
 
     with col2:
         st.subheader(":material/password: Alterar senha")
@@ -953,4 +1056,4 @@ elif menu == MENU_MINHA_CONTA:
 
 
 st.markdown("---")
-st.caption(f"Portal Power BI v2.0 (Supabase) | Usuario {usuario['username']}")
+st.caption(f"Portal Power BI v3.0 (Supabase) | Usuário {usuario['username']}")
