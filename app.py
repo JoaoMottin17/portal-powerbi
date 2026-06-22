@@ -140,6 +140,18 @@ except Exception as e:  # noqa: BLE001
     st.stop()
 
 
+# Leituras usadas na gestao de usuarios. Cacheadas para a tela nao bater no
+# Supabase a cada rerun (evita lentidao); o cache e limpado nas gravacoes.
+@st.cache_data(ttl=120, show_spinner=False)
+def cached_listar_usuarios():
+    return db.listar_usuarios()
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def cached_listar_relatorios_basico():
+    return db.listar_relatorios_basico()
+
+
 def render_logo(width: int, path: str = "logo.png", use_container_width: bool = False):
     if os.path.exists(path):
         if use_container_width:
@@ -366,9 +378,12 @@ def listar_relatorios_basico():
 
 def criar_relatorio(titulo, link_powerbi, descricao, categoria, criado_por, nivel_hierarquia):
     try:
-        return db.criar_relatorio(
+        ok = db.criar_relatorio(
             titulo, link_powerbi, descricao, categoria, criado_por, nivel_hierarquia
         )
+        if ok:
+            cached_listar_relatorios_basico.clear()
+        return ok
     except Exception as e:
         st.error(f"Erro ao criar relatorio: {e}")
         return False
@@ -376,9 +391,12 @@ def criar_relatorio(titulo, link_powerbi, descricao, categoria, criado_por, nive
 
 def atualizar_relatorio(relatorio_id, titulo, link_powerbi, descricao, categoria, nivel_hierarquia):
     try:
-        return db.atualizar_relatorio(
+        ok = db.atualizar_relatorio(
             relatorio_id, titulo, link_powerbi, descricao, categoria, nivel_hierarquia
         )
+        if ok:
+            cached_listar_relatorios_basico.clear()
+        return ok
     except Exception as e:
         st.error(f"Erro ao atualizar relatorio: {e}")
         return False
@@ -400,7 +418,10 @@ def niveis_disponiveis_para(usuario):
 
 def excluir_relatorio(relatorio_id):
     try:
-        return db.excluir_relatorio(relatorio_id)
+        ok = db.excluir_relatorio(relatorio_id)
+        if ok:
+            cached_listar_relatorios_basico.clear()
+        return ok
     except Exception as e:
         st.error(f"Erro ao excluir relatorio: {e}")
         return False
@@ -417,10 +438,13 @@ def obter_usuario_por_id(usuario_id):
 def criar_usuario(username, senha, is_admin=False, nivel_hierarquia="operacao",
                   categorias_permitidas=None, relatorios_permitidos=None):
     try:
-        return db.criar_usuario_portal(
+        ok = db.criar_usuario_portal(
             username, senha, is_admin, nivel_hierarquia,
             categorias_permitidas, relatorios_permitidos,
         )
+        if ok:
+            cached_listar_usuarios.clear()
+        return ok
     except Exception as e:
         msg = str(e).lower()
         if "duplicate" in msg or "unique" in msg:
@@ -433,10 +457,13 @@ def criar_usuario(username, senha, is_admin=False, nivel_hierarquia="operacao",
 def atualizar_usuario(usuario_id, username=None, is_admin=None, nivel_hierarquia=None,
                       categorias_permitidas=None, relatorios_permitidos=None):
     try:
-        return db.atualizar_usuario_portal(
+        ok = db.atualizar_usuario_portal(
             usuario_id, username, is_admin, nivel_hierarquia,
             categorias_permitidas, relatorios_permitidos,
         )
+        if ok:
+            cached_listar_usuarios.clear()
+        return ok
     except Exception as e:
         msg = str(e).lower()
         if "duplicate" in msg or "unique" in msg:
@@ -456,7 +483,10 @@ def atualizar_senha(usuario_id, nova_senha):
 
 def excluir_usuario(usuario_id):
     try:
-        return db.excluir_usuario(usuario_id)
+        ok = db.excluir_usuario(usuario_id)
+        if ok:
+            cached_listar_usuarios.clear()
+        return ok
     except Exception as e:
         st.error(f"Erro ao excluir usuario: {e}")
         return False
@@ -785,7 +815,9 @@ elif menu == MENU_NOVO_RELATORIO:
         if relatorio["nivel_hierarquia"] not in opcoes_nivel:
             opcoes_nivel = [relatorio["nivel_hierarquia"]] + opcoes_nivel
 
-    with st.form("novo_relatorio_form", clear_on_submit=not modo_edicao):
+    # Chave do form varia por relatorio para nao reaproveitar valores de outro.
+    _form_key = f"rel_form_{relatorio['id']}" if modo_edicao else "rel_form_novo"
+    with st.form(_form_key, clear_on_submit=not modo_edicao):
         if modo_edicao:
             titulo = st.text_input("Titulo do relatorio *", value=relatorio["titulo"])
             link = st.text_area("Link do relatorio (Power BI ou Streamlit) *",
@@ -852,176 +884,197 @@ elif menu == MENU_GERENCIAR_USUARIOS:
         st.error("Acesso restrito. Apenas administradores podem gerenciar usuarios.")
         st.stop()
 
-    if "editar_usuario_id" in st.session_state:
-        tab1, tab2 = st.tabs([":material/edit: Editar usuário", ":material/list: Lista de usuários"])
+    usuarios_db = cached_listar_usuarios()
+    modo_edicao = "editar_usuario_id" in st.session_state
+    user_data = None
+    if modo_edicao:
+        user_data = next(
+            (u for u in usuarios_db if u["id"] == st.session_state["editar_usuario_id"]), None
+        )
+        if user_data is None:
+            st.warning("Usuário não encontrado (pode ter sido removido).")
+            del st.session_state["editar_usuario_id"]
+            st.rerun()
+
+    # Chave estavel por usuario (ou por sessao de criacao): garante que ao trocar
+    # de usuario os campos recarreguem os valores certos, sem estado preso.
+    if modo_edicao:
+        fid = f"edit{user_data['id']}"
+        st.subheader(f":material/edit: Editando usuário: {user_data['username']}")
     else:
-        tab1, tab2 = st.tabs([":material/person_add: Criar novo usuário", ":material/list: Lista de usuários"])
+        fid = f"novo{st.session_state.get('novo_user_nonce', 0)}"
+        st.subheader(":material/person_add: Criar novo usuário")
 
-    with tab1:
-        if "editar_usuario_id" in st.session_state:
-            user_data = obter_usuario_por_id(st.session_state["editar_usuario_id"])
-            if user_data is None:
-                st.warning("Usuario nao encontrado (pode ter sido removido).")
-                del st.session_state["editar_usuario_id"]
-                st.rerun()
-            modo_edicao = True
+    st.markdown("**Dados de acesso**")
+    novo_username = st.text_input(
+        "Nome de usuário *",
+        value=(user_data["username"] if modo_edicao else ""),
+        key=f"u_username_{fid}",
+    )
+    if modo_edicao:
+        alterar_senha = st.checkbox("Alterar senha?", key=f"u_chsenha_{fid}")
+    else:
+        alterar_senha = True
+    if alterar_senha:
+        c_s1, c_s2 = st.columns(2)
+        nova_senha = c_s1.text_input("Senha *", type="password", key=f"u_senha_{fid}")
+        confirmar_senha = c_s2.text_input("Confirmar senha *", type="password", key=f"u_csenha_{fid}")
+    else:
+        nova_senha = ""
+        confirmar_senha = ""
+
+    st.markdown("**Perfil e hierarquia**")
+    col_perfil, col_nivel = st.columns(2)
+    with col_perfil:
+        perfil = st.radio(
+            "Perfil",
+            ["Usuário comum", "Administrador"],
+            index=1 if (modo_edicao and user_data["is_admin"]) else 0,
+            key=f"u_perfil_{fid}",
+            help="Administrador enxerga todos os relatórios e gerencia usuários.",
+        )
+        user_is_admin = perfil == "Administrador"
+    with col_nivel:
+        if user_is_admin:
+            st.radio("Nível hierárquico", ["Gestão"], index=0, disabled=True, key=f"u_niveladm_{fid}")
+            nivel_sel = "gestao"
         else:
-            user_data = None
-            modo_edicao = False
+            nivel_atual = user_data["nivel_hierarquia"] if modo_edicao else "operacao"
+            nivel_idx = (
+                NIVEIS_HIERARQUIA.index(nivel_atual)
+                if nivel_atual in NIVEIS_HIERARQUIA
+                else NIVEIS_HIERARQUIA.index("operacao")
+            )
+            nivel_sel = st.radio(
+                "Nível hierárquico",
+                NIVEIS_HIERARQUIA,
+                index=nivel_idx,
+                format_func=lambda n: NIVEL_LABELS[n],
+                key=f"u_nivel_{fid}",
+                help="Gestão vê relatórios de gestão e de operação; Operação vê só os de operação.",
+            )
 
-        # Opcoes de relatorios para a liberacao individual (filtro secundario).
-        rel_basico = listar_relatorios_basico()
+    if user_is_admin:
+        st.info("Administrador enxerga todos os relatórios — áreas e liberação individual não se aplicam.")
+        areas_final = list(CATEGORIAS_PADRAO)
+        indiv_sel = []
+    else:
+        st.markdown("**Filtro primário — áreas de atuação**")
+        areas_default = [
+            a for a in (user_data["categorias_permitidas"] if modo_edicao else ["GERAL"])
+            if a in CATEGORIAS_PADRAO
+        ]
+        areas_sel = st.multiselect(
+            "Áreas que o usuário pode acessar",
+            CATEGORIAS_PADRAO,
+            default=areas_default,
+            key=f"u_areas_{fid}",
+            help="O usuário só enxerga relatórios destas áreas.",
+        )
+        areas_final = areas_sel if areas_sel else ["GERAL"]
+
+        st.markdown("**Filtro secundário — liberação individual**")
+        rel_basico = cached_listar_relatorios_basico()
         rel_label = {
             r["id"]: f"{r['categoria']} · {NIVEL_LABELS[r['nivel_hierarquia']]} · {r['titulo']}"
             for r in rel_basico
         }
         rel_ids = [r["id"] for r in rel_basico]
+        indiv_default = [
+            i for i in (user_data["relatorios_permitidos"] if modo_edicao else []) if i in rel_label
+        ]
+        indiv_sel = st.multiselect(
+            "Relatórios liberados individualmente",
+            rel_ids,
+            default=indiv_default,
+            format_func=lambda i: rel_label.get(i, f"#{i}"),
+            key=f"u_indiv_{fid}",
+            help=("Deixe VAZIO para liberar todos os relatórios das áreas. Se marcar relatórios, "
+                  "o usuário verá APENAS esses (sempre dentro das áreas e do nível permitidos)."),
+        )
 
-        with st.form("criar_editar_usuario_form"):
-            st.markdown("##### Dados de acesso")
-            if modo_edicao:
-                novo_username = st.text_input("Nome de usuário *", value=user_data["username"])
-                alterar_senha = st.checkbox("Alterar senha?")
+    st.markdown("")
+    col_salvar, col_cancelar = st.columns(2)
+    salvar = col_salvar.button(
+        "Salvar alterações" if modo_edicao else "Criar usuário",
+        icon=":material/save:", type="primary", use_container_width=True, key=f"u_salvar_{fid}",
+    )
+    cancelar = False
+    if modo_edicao:
+        cancelar = col_cancelar.button(
+            "Cancelar", icon=":material/close:", type="secondary",
+            use_container_width=True, key=f"u_cancelar_{fid}",
+        )
+
+    if cancelar:
+        del st.session_state["editar_usuario_id"]
+        st.rerun()
+
+    if salvar:
+        checar_senha = (not modo_edicao) or alterar_senha
+        erro = None
+        if not novo_username:
+            erro = "Informe o nome de usuário."
+        elif checar_senha:
+            if not nova_senha or not confirmar_senha:
+                erro = "Preencha e confirme a senha."
+            elif nova_senha != confirmar_senha:
+                erro = "As senhas não coincidem."
+            elif len(nova_senha) < 6:
+                erro = "A senha deve ter pelo menos 6 caracteres."
+
+        if erro:
+            st.error(erro)
+        elif modo_edicao:
+            ok = atualizar_usuario(
+                user_data["id"], username=novo_username, is_admin=user_is_admin,
+                nivel_hierarquia=nivel_sel, categorias_permitidas=areas_final,
+                relatorios_permitidos=indiv_sel,
+            )
+            if ok:
                 if alterar_senha:
-                    nova_senha = st.text_input("Nova senha *", type="password")
-                    confirmar_senha = st.text_input("Confirmar nova senha *", type="password")
-                else:
-                    nova_senha = ""
-                    confirmar_senha = ""
-            else:
-                novo_username = st.text_input("Nome de usuário *")
-                nova_senha = st.text_input("Senha *", type="password")
-                confirmar_senha = st.text_input("Confirmar senha *", type="password")
-
-            st.markdown("##### Perfil e hierarquia")
-            col_perfil, col_nivel = st.columns(2)
-            with col_perfil:
-                perfil = st.radio(
-                    "Perfil",
-                    ["Usuário comum", "Administrador"],
-                    index=1 if (modo_edicao and user_data["is_admin"]) else 0,
-                    help="Administrador enxerga todos os relatórios e gerencia usuários.",
-                )
-                user_is_admin = perfil == "Administrador"
-            with col_nivel:
-                nivel_atual = user_data["nivel_hierarquia"] if modo_edicao else "operacao"
-                nivel_idx = (
-                    NIVEIS_HIERARQUIA.index(nivel_atual)
-                    if nivel_atual in NIVEIS_HIERARQUIA
-                    else NIVEIS_HIERARQUIA.index("operacao")
-                )
-                nivel_sel = st.radio(
-                    "Nível hierárquico",
-                    NIVEIS_HIERARQUIA,
-                    index=nivel_idx,
-                    format_func=lambda n: NIVEL_LABELS[n],
-                    help="Gestão vê relatórios de gestão e de operação; Operação vê só os de operação.",
-                )
-
-            st.markdown("##### Filtro primário — áreas de atuação")
-            areas_default = list(user_data["categorias_permitidas"]) if modo_edicao else ["GERAL"]
-            areas_default = [a for a in areas_default if a in CATEGORIAS_PADRAO]
-            areas_sel = st.multiselect(
-                "Áreas que o usuário pode acessar",
-                CATEGORIAS_PADRAO,
-                default=areas_default,
-                help="O usuário só enxerga relatórios destas áreas (ignorado para administradores).",
-            )
-
-            st.markdown("##### Filtro secundário — liberação individual")
-            indiv_default = [
-                i for i in (user_data["relatorios_permitidos"] if modo_edicao else []) if i in rel_label
-            ]
-            indiv_sel = st.multiselect(
-                "Relatórios liberados individualmente",
-                rel_ids,
-                default=indiv_default,
-                format_func=lambda i: rel_label.get(i, f"#{i}"),
-                help=("Deixe VAZIO para liberar todos os relatórios das áreas. Se marcar relatórios, "
-                      "o usuário verá APENAS esses (sempre dentro das áreas e do nível permitidos)."),
-            )
-            if user_is_admin:
-                st.caption("Administrador enxerga tudo — nível, áreas e liberação individual são ignorados.")
-
-            col_salvar, col_cancelar = st.columns(2)
-            with col_salvar:
-                btn_text = "Salvar alterações" if modo_edicao else "Criar usuário"
-                if st.form_submit_button(btn_text, icon=":material/save:", type="primary", use_container_width=True):
-                    areas_final = areas_sel if areas_sel else ["GERAL"]
-                    if modo_edicao:
-                        senha_ok = True
-                        if alterar_senha and (nova_senha or confirmar_senha):
-                            if nova_senha != confirmar_senha:
-                                st.error("As senhas nao coincidem.")
-                                senha_ok = False
-                            elif len(nova_senha) < 6:
-                                st.error("A senha deve ter pelo menos 6 caracteres.")
-                                senha_ok = False
-                            else:
-                                atualizar_senha(user_data["id"], nova_senha)
-                        if senha_ok:
-                            ok = atualizar_usuario(
-                                user_data["id"],
-                                username=novo_username,
-                                is_admin=user_is_admin,
-                                nivel_hierarquia=nivel_sel,
-                                categorias_permitidas=areas_final,
-                                relatorios_permitidos=indiv_sel,
-                            )
-                            if ok:
-                                st.success("Usuario atualizado com sucesso.")
-                                del st.session_state["editar_usuario_id"]
-                                st.rerun()
-                    else:
-                        if not all([novo_username, nova_senha, confirmar_senha]):
-                            st.error("Preencha usuário e senha.")
-                        elif nova_senha != confirmar_senha:
-                            st.error("As senhas nao coincidem.")
-                        elif len(nova_senha) < 6:
-                            st.error("A senha deve ter pelo menos 6 caracteres.")
-                        else:
-                            if criar_usuario(
-                                novo_username, nova_senha, user_is_admin,
-                                nivel_sel, areas_final, indiv_sel,
-                            ):
-                                st.success(f"Usuario {novo_username} criado com sucesso.")
-                                st.rerun()
-
-            with col_cancelar:
-                if modo_edicao and st.form_submit_button("Cancelar", icon=":material/close:", type="secondary", use_container_width=True):
-                    del st.session_state["editar_usuario_id"]
-                    st.rerun()
-
-    with tab2:
-        usuarios_db = listar_usuarios()
-        if not usuarios_db:
-            st.info("Nenhum usuario cadastrado.")
+                    atualizar_senha(user_data["id"], nova_senha)
+                st.success("Usuário atualizado com sucesso.")
+                del st.session_state["editar_usuario_id"]
+                st.rerun()
         else:
-            for user in usuarios_db:
-                with st.container(border=True):
-                    c1, c2, c3 = st.columns([3, 1, 1])
-                    with c1:
-                        st.write(f"Usuário: {user['username']}")
-                        st.write(f"Tipo: {'Administrador' if user['is_admin'] else 'Usuário comum'}")
-                        if not user["is_admin"]:
-                            st.write(f"Nível: {NIVEL_LABELS.get(user.get('nivel_hierarquia'), 'Operação')}")
-                            st.write(f"Áreas: {', '.join(user['categorias_permitidas'][:6])}"
-                                     + (f" … (+{len(user['categorias_permitidas']) - 6})"
-                                        if len(user["categorias_permitidas"]) > 6 else ""))
-                            qtd_indiv = len(user.get("relatorios_permitidos") or [])
-                            if qtd_indiv:
-                                st.write(f"Liberação individual: {qtd_indiv} relatório(s) — vê apenas esses")
-                        st.write(f"Criado em: {fmt_data(user['criado_em'])}")
-                    with c2:
-                        if st.button("Editar", icon=":material/edit:", key=f"edit_{user['id']}", type="secondary"):
-                            st.session_state["editar_usuario_id"] = user["id"]
-                            st.rerun()
-                    with c3:
-                        if user["username"] != "admin":
-                            if st.button("Excluir", icon=":material/delete:", key=f"delete_{user['id']}", type="secondary"):
-                                if excluir_usuario(user["id"]):
-                                    st.success(f"Usuario {user['username']} excluido.")
-                                    st.rerun()
+            if criar_usuario(novo_username, nova_senha, user_is_admin, nivel_sel, areas_final, indiv_sel):
+                st.success(f"Usuário {novo_username} criado com sucesso.")
+                st.session_state["novo_user_nonce"] = st.session_state.get("novo_user_nonce", 0) + 1
+                st.rerun()
+
+    st.markdown("---")
+    st.markdown("##### Usuários cadastrados")
+    if not usuarios_db:
+        st.info("Nenhum usuário cadastrado.")
+    else:
+        for user in usuarios_db:
+            with st.container(border=True):
+                c1, c2, c3 = st.columns([3, 1, 1])
+                with c1:
+                    st.write(f"Usuário: {user['username']}")
+                    st.write(f"Tipo: {'Administrador' if user['is_admin'] else 'Usuário comum'}")
+                    if not user["is_admin"]:
+                        st.write(f"Nível: {NIVEL_LABELS.get(user.get('nivel_hierarquia'), 'Operação')}")
+                        st.write(f"Áreas: {', '.join(user['categorias_permitidas'][:6])}"
+                                 + (f" … (+{len(user['categorias_permitidas']) - 6})"
+                                    if len(user["categorias_permitidas"]) > 6 else ""))
+                        qtd_indiv = len(user.get("relatorios_permitidos") or [])
+                        if qtd_indiv:
+                            st.write(f"Liberação individual: {qtd_indiv} relatório(s) — vê apenas esses")
+                    st.write(f"Criado em: {fmt_data(user['criado_em'])}")
+                with c2:
+                    if st.button("Editar", icon=":material/edit:", key=f"edit_{user['id']}", type="secondary"):
+                        st.session_state["editar_usuario_id"] = user["id"]
+                        st.rerun()
+                with c3:
+                    if user["username"] != "admin":
+                        if st.button("Excluir", icon=":material/delete:", key=f"delete_{user['id']}", type="secondary"):
+                            if excluir_usuario(user["id"]):
+                                if st.session_state.get("editar_usuario_id") == user["id"]:
+                                    del st.session_state["editar_usuario_id"]
+                                st.success(f"Usuário {user['username']} excluído.")
+                                st.rerun()
 
 elif menu == MENU_MINHA_CONTA:
     col1, col2 = st.columns([1, 2])
