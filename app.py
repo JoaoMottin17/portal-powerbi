@@ -106,55 +106,40 @@ def _injetar_favicon_tema():
 
 
 def _ocultar_acoes_github_toolbar():
-    """Esconde o icone 'ver codigo-fonte no GitHub' (e os botoes Share/favoritar)
-    que o Streamlit Community Cloud injeta na barra superior de apps de
-    repositorio PUBLICO.
+    """Esconde o icone 'ver codigo-fonte no GitHub' que o Streamlit Community
+    Cloud injeta na barra superior de apps de repositorio PUBLICO.
+
+    Funciona via CSS injetado no documento principal (o unico canal confiavel:
+    o Streamlit remove <script>, e o iframe de components.html nao alcança a
+    barra por ser de outra origem). Por isso cobrimos varias formas possiveis
+    do elemento (link por href, link/botao por aria-label/title).
 
     ATENCAO: isto e apenas COSMETICO. O repositorio continua publico e
     acessivel diretamente no GitHub (busca, URL, etc.). Para realmente
     proteger o codigo-fonte, torne o repositorio privado."""
-    # 1) CSS no documento principal (a toolbar fica no mesmo DOM do app).
     st.markdown(
         """
         <style>
-          /* Link de codigo-fonte do GitHub na barra superior */
+          /* Link/botao de codigo-fonte do GitHub — cobre varias formas: */
+          a[href*="github.com"],
+          a[aria-label*="github" i], a[title*="github" i],
+          button[aria-label*="github" i], button[title*="github" i],
           [data-testid="stToolbar"] a[href*="github.com"],
-          [data-testid="stToolbarActions"] a[href*="github.com"] {
+          [data-testid="stToolbarActions"] a[href*="github.com"],
+          [data-testid="stToolbarActions"] a[aria-label*="github" i],
+          [data-testid="stToolbarActions"] button[aria-label*="github" i] {
+              display: none !important;
+          }
+          /* Esconde tambem o container que envolve o link, se houver
+             (navegadores com suporte a :has). */
+          [data-testid="stToolbar"] li:has(a[href*="github.com"]),
+          [data-testid="stToolbar"] *:has(> a[href*="github.com"]),
+          [data-testid="stToolbarActions"] *:has(> a[href*="github.com"]) {
               display: none !important;
           }
         </style>
         """,
         unsafe_allow_html=True,
-    )
-    # 2) Reforco via JS no documento-pai: cobre botoes sem href (icone via
-    #    onClick) e re-renderizacoes. Mesmo padrao usado no favicon.
-    components.html(
-        """
-        <script>
-        (function () {
-          try {
-            var doc = window.parent.document;
-            function esconder() {
-              var sels = '[data-testid="stToolbar"] a, [data-testid="stToolbar"] button,'
-                       + '[data-testid="stToolbarActions"] a, [data-testid="stToolbarActions"] button';
-              doc.querySelectorAll(sels).forEach(function (el) {
-                var txt = ((el.getAttribute("href") || "") + " "
-                         + (el.getAttribute("aria-label") || "") + " "
-                         + (el.getAttribute("title") || "") + " "
-                         + (el.textContent || "")).toLowerCase();
-                if (txt.indexOf("github") !== -1 || txt.indexOf("source") !== -1
-                    || txt.indexOf("fonte") !== -1 || txt.indexOf("fork") !== -1) {
-                  el.style.display = "none";
-                }
-              });
-            }
-            esconder();
-            new MutationObserver(esconder).observe(doc.body, {childList: true, subtree: true});
-          } catch (e) {}
-        })();
-        </script>
-        """,
-        height=0, width=0,
     )
 
 
