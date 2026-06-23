@@ -14,3 +14,10 @@ enableXsrfProtection = true
 [browser]
 serverAddress = "localhost"
 gatherUsageStats = false
+
+[client]
+# Enxuga a barra superior do app: esconde o menu de desenvolvedor (⋮).
+# Obs.: no Streamlit Community Cloud o ícone "ver código no GitHub" é injetado
+# por fora do app; ele é ocultado adicionalmente via CSS/JS em app.py
+# (_ocultar_acoes_github_toolbar). Isso é cosmético — o repo segue público.
+toolbarMode = "minimal"
