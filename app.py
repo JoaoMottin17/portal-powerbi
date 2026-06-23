@@ -109,10 +109,15 @@ def _ocultar_acoes_github_toolbar():
     """Esconde o icone 'ver codigo-fonte no GitHub' que o Streamlit Community
     Cloud injeta na barra superior de apps de repositorio PUBLICO.
 
-    Funciona via CSS injetado no documento principal (o unico canal confiavel:
-    o Streamlit remove <script>, e o iframe de components.html nao alcança a
-    barra por ser de outra origem). Por isso cobrimos varias formas possiveis
-    do elemento (link por href, link/botao por aria-label/title).
+    Estrutura real (inspecionada no app publicado): dentro de
+    [data-testid="stToolbarActions"] ha varios [data-testid="stToolbarActionButton"]
+    na ordem Share, favoritar, GitHub. O botao do GitHub NAO tem href nem
+    aria-label (o icone e um SVG de background), entao mira-se pela POSICAO:
+    e o ultimo botao de acao. Assim some so o GitHub, preservando Share e ⭐.
+
+    Funciona via CSS injetado no documento do app (o stToolbar esta no mesmo
+    documento; <script> e removido pelo Streamlit e o iframe de components.html
+    e de outra origem, logo CSS e o unico canal confiavel).
 
     ATENCAO: isto e apenas COSMETICO. O repositorio continua publico e
     acessivel diretamente no GitHub (busca, URL, etc.). Para realmente
@@ -120,21 +125,12 @@ def _ocultar_acoes_github_toolbar():
     st.markdown(
         """
         <style>
-          /* Link/botao de codigo-fonte do GitHub — cobre varias formas: */
-          a[href*="github.com"],
-          a[aria-label*="github" i], a[title*="github" i],
-          button[aria-label*="github" i], button[title*="github" i],
-          [data-testid="stToolbar"] a[href*="github.com"],
-          [data-testid="stToolbarActions"] a[href*="github.com"],
-          [data-testid="stToolbarActions"] a[aria-label*="github" i],
-          [data-testid="stToolbarActions"] button[aria-label*="github" i] {
+          /* Botao "ver codigo-fonte no GitHub" = ultima acao da barra. */
+          [data-testid="stToolbarActions"] > [data-testid="stToolbarActionButton"]:last-child {
               display: none !important;
           }
-          /* Esconde tambem o container que envolve o link, se houver
-             (navegadores com suporte a :has). */
-          [data-testid="stToolbar"] li:has(a[href*="github.com"]),
-          [data-testid="stToolbar"] *:has(> a[href*="github.com"]),
-          [data-testid="stToolbarActions"] *:has(> a[href*="github.com"]) {
+          /* Defensivo: caso alguma versao volte a usar um link para o GitHub. */
+          [data-testid="stToolbar"] a[href*="github.com"] {
               display: none !important;
           }
         </style>
