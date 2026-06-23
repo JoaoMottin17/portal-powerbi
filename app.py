@@ -105,34 +105,25 @@ def _injetar_favicon_tema():
     components.html(js, height=0, width=0)
 
 
-def _ocultar_acoes_github_toolbar():
-    """Esconde o icone 'ver codigo-fonte no GitHub' que o Streamlit Community
-    Cloud injeta na barra superior de apps de repositorio PUBLICO.
+def _ocultar_barra_superior():
+    """Esconde TODA a barra superior do Streamlit no app publicado: a faixa de
+    topo, a toolbar com Share/favoritar/GitHub e o menu ⋮, e o indicador de
+    status. Some, portanto, tambem o icone de codigo-fonte do GitHub.
 
-    Estrutura real (inspecionada no app publicado): dentro de
-    [data-testid="stToolbarActions"] ha varios [data-testid="stToolbarActionButton"]
-    na ordem Share, favoritar, GitHub. O botao do GitHub NAO tem href nem
-    aria-label (o icone e um SVG de background), entao mira-se pela POSICAO:
-    e o ultimo botao de acao. Assim some so o GitHub, preservando Share e ⭐.
+    Via CSS injetado no documento do app (canal confiavel: <script> e removido
+    pelo Streamlit e o iframe de components.html e de outra origem). Os controles
+    de recolher/expandir a barra lateral ficam no componente da sidebar, nao no
+    header, entao continuam funcionando.
 
-    Funciona via CSS injetado no documento do app (o stToolbar esta no mesmo
-    documento; <script> e removido pelo Streamlit e o iframe de components.html
-    e de outra origem, logo CSS e o unico canal confiavel).
-
-    ATENCAO: isto e apenas COSMETICO. O repositorio continua publico e
-    acessivel diretamente no GitHub (busca, URL, etc.). Para realmente
-    proteger o codigo-fonte, torne o repositorio privado."""
+    Obs.: o repositorio continua publico e acessivel direto no GitHub. Para
+    proteger o codigo de verdade, torne o repositorio privado."""
     st.markdown(
         """
         <style>
-          /* Botao "ver codigo-fonte no GitHub" = ultima acao da barra. */
-          [data-testid="stToolbarActions"] > [data-testid="stToolbarActionButton"]:last-child {
-              display: none !important;
-          }
-          /* Defensivo: caso alguma versao volte a usar um link para o GitHub. */
-          [data-testid="stToolbar"] a[href*="github.com"] {
-              display: none !important;
-          }
+          /* Toda a barra/cabecalho superior do Streamlit... */
+          [data-testid="stHeader"] { display: none !important; }
+          /* ...e a toolbar de acoes, caso seja renderizada fora do header. */
+          [data-testid="stToolbar"] { display: none !important; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -146,7 +137,7 @@ st.set_page_config(
 )
 
 _injetar_favicon_tema()
-_ocultar_acoes_github_toolbar()
+_ocultar_barra_superior()
 
 
 MENU_DASHBOARD = "Dashboard"
